@@ -159,5 +159,11 @@ def parse_with_ai(description: str) -> Optional[dict]:
 
     payload = _extract_json(text)
     if not payload:
+        logger.warning("AI response had no parseable JSON (model=%s): %r", model, (text or "")[:300])
         return None
-    return _normalize(payload)
+    result = _normalize(payload)
+    if result is None:
+        logger.warning("AI JSON had no usable line items (model=%s): %r", model, payload)
+    else:
+        logger.info("AI parse OK (model=%s): %d line items", model, len(result["line_items"]))
+    return result
