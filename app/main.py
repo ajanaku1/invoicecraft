@@ -8,6 +8,8 @@ from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from app.invoice import create_invoice
 from app.models import InvoiceRequest, IssuerInfo
@@ -29,7 +31,12 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "InvoiceCraft"}
+    return {
+        "status": "ok",
+        "service": "InvoiceCraft",
+        "payment_mode": os.getenv("PAYMENT_VERIFY_MODE", "mock").lower(),
+        "ai_enabled": bool(os.getenv("LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY")),
+    }
 
 
 @app.post("/api/v1/invoice")
@@ -91,7 +98,8 @@ async def invoice_endpoint(req: InvoiceRequest):
         )
 
         try:
-            invoice = create_invoice(
+            invoice = await run_in_threadpool(
+                create_invoice,
                 description=desc,
                 tax_rate=tax_rate,
                 issuer=issuer,
@@ -144,9 +152,24 @@ async def invoice_endpoint(req: InvoiceRequest):
                 "amount": "0.50",
                 "token": "USDT",
                 "chain": "eip155:196",
+                "chain_id": "0xc4",
                 "receiver": asp_wallet,
                 "challenge_id": challenge_id,
                 "memo": challenge_id,
+                # On-chain details for wallet payment. token_contract is empty
+                # unless the operator configures USDT_CONTRACT; when empty the UI
+                # falls back to simulated (mock) payment.
+                "token_contract": os.getenv("USDT_CONTRACT", ""),
+                "decimals": int(os.getenv("USDT_DECIMALS", "6")),
+                "rpc_url": os.getenv("XLAYER_RPC", ""),
             },
         },
     )
+
+
+# Serve the demo dashboard from the same origin as the API (so the browser's
+# fetch calls hit this app directly — no CORS/port juggling). Mounted last so
+# it never shadows the /health and /api routes above.
+_DASHBOARD_DIR = os.path.join(os.path.dirname(__file__), "..", "dashboard")
+if os.path.isdir(_DASHBOARD_DIR):
+    app.mount("/", StaticFiles(directory=_DASHBOARD_DIR, html=True), name="dashboard")
