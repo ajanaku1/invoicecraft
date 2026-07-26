@@ -114,7 +114,12 @@ def parse_with_ai(description: str) -> Optional[dict]:
             },
             timeout=timeout,
         )
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            logger.warning(
+                "AI parse HTTP %s from LLM (model=%s): %s; using heuristic parser",
+                resp.status_code, model, resp.text[:600],
+            )
+            return None
         data = resp.json()
         text = data["content"][0]["text"]
     except Exception:
