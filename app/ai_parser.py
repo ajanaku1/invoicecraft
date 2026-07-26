@@ -81,47 +81,78 @@ def _normalize(payload: dict) -> Optional[dict]:
     }
 
 
+def _call_anthropic(url, api_key, model, user_content, timeout):
+    resp = httpx.post(
+        url,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": model,
+            "max_tokens": 1024,
+            "system": _SYSTEM,
+            "messages": [{"role": "user", "content": user_content}],
+        },
+        timeout=timeout,
+    )
+    return resp, (lambda d: d["content"][0]["text"])
+
+
+def _call_openai(url, api_key, model, user_content, timeout):
+    # OpenAI-compatible: DeepSeek, OpenRouter, OpenCode, Together, Groq, etc.
+    resp = httpx.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "content-type": "application/json",
+        },
+        json={
+            "model": model,
+            "max_tokens": 1024,
+            "messages": [
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": user_content},
+            ],
+        },
+        timeout=timeout,
+    )
+    return resp, (lambda d: d["choices"][0]["message"]["content"])
+
+
 def parse_with_ai(description: str) -> Optional[dict]:
     """Parse a job description into structured invoice data using an LLM.
 
-    Returns None (so the caller falls back to the heuristic parser) when no API
-    key is configured or the call fails for any reason. Network I/O is blocking;
-    callers on the async path run this via a threadpool.
+    Provider-agnostic. Set LLM_API_STYLE to "anthropic" (default) or "openai"
+    for any OpenAI-compatible endpoint (DeepSeek, OpenRouter, OpenCode, ...),
+    and LLM_API_URL to that endpoint. Returns None (so the caller falls back to
+    the heuristic parser) when no key is configured or the call fails.
     """
     api_key = os.getenv("LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         return None
     model = os.getenv("LLM_MODEL", "claude-sonnet-5")
+    style = os.getenv("LLM_API_STYLE", "anthropic").lower()
     timeout = float(os.getenv("LLM_TIMEOUT", "30"))
+    user_content = f"{_SCHEMA_HINT}\n\nJob description:\n{description}"
+
+    if style == "openai":
+        url = os.getenv("LLM_API_URL", "https://api.openai.com/v1/chat/completions")
+        caller = _call_openai
+    else:
+        url = os.getenv("LLM_API_URL", ANTHROPIC_URL)
+        caller = _call_anthropic
+
     try:
-        resp = httpx.post(
-            ANTHROPIC_URL,
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": model,
-                "max_tokens": 1024,
-                "system": _SYSTEM,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": f"{_SCHEMA_HINT}\n\nJob description:\n{description}",
-                    }
-                ],
-            },
-            timeout=timeout,
-        )
+        resp, extract = caller(url, api_key, model, user_content, timeout)
         if resp.status_code >= 400:
             logger.warning(
-                "AI parse HTTP %s from LLM (model=%s): %s; using heuristic parser",
-                resp.status_code, model, resp.text[:600],
+                "AI parse HTTP %s from LLM (style=%s model=%s): %s; using heuristic parser",
+                resp.status_code, style, model, resp.text[:600],
             )
             return None
-        data = resp.json()
-        text = data["content"][0]["text"]
+        text = extract(resp.json())
     except Exception:
         logger.warning("AI parse failed; falling back to heuristic parser", exc_info=True)
         return None
