@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: invoicecraft
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ASP_WALLET
+        sync: false
+      - key: INVOICE_ISSUER_NAME
+        value: InvoiceCraft AI
+      - key: INVOICE_ISSUER_EMAIL
+        value: invoice@craft.dev
+      - key: TAX_RATE
+        value: "0.08"

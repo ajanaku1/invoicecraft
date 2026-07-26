@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InvoiceCraft — terminal</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0a;
+    --bg-panel: #1a1a1a;
+    --green: #33ff33;
+    --amber: #ffb000;
+    --red: #ff3333;
+    --dim: rgba(51, 255, 51, 0.5);
+    --border: rgba(51, 255, 51, 0.35);
+    --font: "JetBrains Mono", "Fira Code", "Cascadia Code", "Courier New", monospace;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--green);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .titlebar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .titlebar-prompt {
+    color: var(--amber);
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .titlebar-title {
+    color: var(--green);
+    opacity: 0.85;
+    letter-spacing: 0.5px;
+  }
+  .titlebar-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .ascii {
+    padding: 16px 16px 8px;
+    font-size: 11px;
+    line-height: 1.2;
+    color: var(--dim);
+    white-space: pre;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  .input-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    padding: 8px 16px;
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+  }
+  .input-prefix {
+    color: var(--amber);
+    font-weight: 700;
+    padding: 8px 10px 8px 0;
+    font-size: 14px;
+    flex-shrink: 0;
+    line-height: 1.5;
+  }
+  .input-wrap {
+    flex: 1;
+    position: relative;
+  }
+  .input-wrap textarea {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--green);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 8px 0;
+    resize: none;
+    outline: none;
+    min-height: 42px;
+  }
+  .input-wrap textarea::placeholder {
+    color: rgba(51, 255, 51, 0.25);
+  }
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  .btn-enter {
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 8px 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-left: 10px;
+    letter-spacing: 1px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .btn-enter:hover {
+    background: var(--green);
+    color: var(--bg);
+  }
+  .btn-enter:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 16px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .output::-webkit-scrollbar {
+    width: 6px;
+  }
+  .output::-webkit-scrollbar-track {
+    background: var(--bg);
+  }
+  .output::-webkit-scrollbar-thumb {
+    background: var(--dim);
+    border-radius: 3px;
+  }
+
+  .line {
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 1px 0;
+  }
+  .line-green { color: var(--green); }
+  .line-amber { color: var(--amber); }
+  .line-red   { color: var(--red); }
+  .line-dim   { color: var(--dim); }
+  .line-white { color: #d4d4d4; }
+
+  .line-spacer { height: 6px; }
+
+  .json-key   { color: #7dcfff; }
+  .json-string { color: #9ece6a; }
+  .json-number { color: #ff9e64; }
+  .json-boolean { color: #bb9af7; }
+  .json-null  { color: var(--dim); }
+  .json-punct { color: #d4d4d4; }
+
+  .statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 16px;
+    border-top: 1px solid var(--border);
+    background: #111;
+    font-size: 12px;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .statusbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--dim);
+  }
+  .status-indicator.active {
+    background: var(--amber);
+    box-shadow: 0 0 6px var(--amber);
+  }
+  .status-indicator.paid {
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+
+  .statusbar-right {
+    color: var(--dim);
+    font-size: 11px;
+  }
+
+  .btn-inject {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: var(--font);
+    font-size: 11px;
+    padding: 3px 10px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .btn-inject:hover {
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <div class="titlebar-left">
+    <span class="titlebar-prompt">&gt;_</span>
+    <span class="titlebar-title">InvoiceCraft — terminal</span>
+  </div>
+  <span class="titlebar-badge">x402 · v0.1.0</span>
+</div>
+
+<div class="app">
+  <div class="ascii">  ╔═══╗╦ ╦╔╗╔╔═╗╦  ╦╔═╗╔═╗╔╦╗╔═╗╔╦╗
+  ║╣ ║║ ║║║║╠╣ ║  ║║ ╦╠═╣ ║║║║╣  ║
+  ╚═╝╚╚═╝╝╚╝╚  ╩═╝╩╚═╝╩ ╩═╩╝╚═╝ ╩
+  ::  ai invoice generator  ::  x402 micropayments  ::</div>
+
+  <div class="input-row">
+    <span class="input-prefix">&gt; curl</span>
+    <div class="input-wrap">
+      <textarea id="promptInput" rows="2" placeholder="describe the invoice..."></textarea>
+    </div>
+    <button class="btn-enter" id="sendBtn">[ENTER]</button>
+  </div>
+
+  <div class="output" id="output"></div>
+</div>
+
+<div class="statusbar" id="statusbar">
+  <div class="statusbar-left">
+    <span class="status-indicator" id="statusDot"></span>
+    <span id="statusText">⏳ awaiting payment</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button class="btn-inject" id="injectBtn">Demo: inject sample</button>
+    <span class="statusbar-right" id="statusRight">idle</span>
+  </div>
+</div>
+
+<script>
+(function() {
+  const promptInput = document.getElementById('promptInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const output = document.getElementById('output');
+  const statusText = document.getElementById('statusText');
+  const statusDot = document.getElementById('statusDot');
+  const statusRight = document.getElementById('statusRight');
+  const injectBtn = document.getElementById('injectBtn');
+
+  let paying = false;
+
+  function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function addLine(text, cls) {
+    const d = document.createElement('div');
+    d.className = 'line' + (cls ? ' ' + cls : '');
+    d.innerHTML = text;
+    output.appendChild(d);
+    output.scrollTop = output.scrollHeight;
+    return d;
+  }
+
+  function addSpacer() {
+    const d = document.createElement('div');
+    d.className = 'line line-spacer';
+    output.appendChild(d);
+  }
+
+  function setStatus(text, state) {
+    statusText.textContent = text;
+    statusDot.className = 'status-indicator' + (state ? ' ' + state : '');
+  }
+
+  function setStatusRight(text) {
+    statusRight.textContent = text;
+  }
+
+  function highlightJson(obj) {
+    const raw = JSON.stringify(obj, null, 2);
+    return raw.replace(
+      /("(?:\\.|[^"\\])*")\s*:/g,
+      '<span class="json-key">$1</span>:'
+    ).replace(
+      /:\s*("(?:\\.|[^"\\])*")/g,
+      ': <span class="json-string">$1</span>'
+    ).replace(
+      /:\s*(\d+(?:\.\d+)?)/g,
+      ': <span class="json-number">$1</span>'
+    ).replace(
+      /:\s*(true|false)/g,
+      ': <span class="json-boolean">$1</span>'
+    ).replace(
+      /:\s*(null)/g,
+      ': <span class="json-null">$1</span>'
+    );
+  }
+
+  function typeText(text, cls, speed, done) {
+    let i = 0;
+    const el = addLine('', cls);
+    function tick() {
+      if (i < text.length) {
+        el.textContent += text[i];
+        i++;
+        output.scrollTop = output.scrollHeight;
+        setTimeout(tick, speed);
+      } else if (done) {
+        done();
+      }
+    }
+    tick();
+    return el;
+  }
+
+  function typeHtml(html, cls, speed, done) {
+    let i = 0;
+    const el = addLine('', cls);
+    function tick() {
+      if (i < html.length) {
+        el.innerHTML += html[i];
+        i++;
+        output.scrollTop = output.scrollHeight;
+        setTimeout(tick, speed);
+      } else if (done) {
+        done();
+      }
+    }
+    tick();
+    return el;
+  }
+
+  function runMock(promptText) {
+    if (paying) return;
+    paying = true;
+    sendBtn.disabled = true;
+    output.innerHTML = '';
+    setStatus('⏳ awaiting payment', 'active');
+    setStatusRight('processing...');
+
+    addLine(escHtml('$ curl -X POST https://api.invoicecraft.dev/v1/invoices \\'), 'line-dim');
+    addLine(escHtml('  -H "Content-Type: application/json" \\'), 'line-dim');
+    addLine(escHtml('  -d \'' + promptText + '\''), 'line-dim');
+    addSpacer();
+
+    typeText('Sending request...', 'line-amber', 16, function() {
+      addSpacer();
+
+      const challenge = {
+        status: 402,
+        error: 'payment_required',
+        message: 'x402 micropayment required',
+        payment: {
+          network: 'base-sepolia',
+          token: 'USDC',
+          amount: '0.50',
+          expiresIn: 300,
+          paymentUrl: 'https://api.invoicecraft.dev/x402/charge_abc123'
+        }
+      };
+
+      addLine('', 'line-dim');
+      typeHtml(highlightJson(challenge), 'line-white', 8, function() {
+        addLine('', 'line-dim');
+        addLine('────────────────────────────────────────', 'line-dim');
+        addLine('⏳ awaiting x402 payment...', 'line-amber');
+        addSpacer();
+
+        setStatus('⏳ awaiting payment', 'active');
+        setStatusRight('waiting for wallet...');
+
+        setTimeout(function() {
+          setStatus('✅ paid 0.50 USDC', 'paid');
+          setStatusRight('confirmed · base-sepolia');
+
+          addLine('✓ x402 payment received — 0.50 USDC', 'line-green');
+          addSpacer();
+
+          const invoice = {
+            status: 201,
+            invoice: {
+              id: 'inv_d0a1b2c3e4f5',
+              issuedTo: promptText.includes('@')
+                ? promptText.match(/[\w.-]+@[\w.-]+\.\w+/)?.[0] || 'client@acme.com'
+                : 'client@acme.com',
+              lineItems: [
+                { description: 'Web Development', quantity: 1, unitPrice: 2500 },
+                { description: 'Responsive Design', quantity: 1, unitPrice: 800 },
+                { description: 'UI/UX Consultation', quantity: 3, unitPrice: 150 }
+              ],
+              subtotal: 3750,
+              tax: 375,
+              total: 4125,
+              currency: 'USDC',
+              dueDate: new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0],
+              paymentStatus: 'pending',
+              memo: 'Generated via InvoiceCraft x402'
+            }
+          };
+
+          addLine('✓ Invoice generated successfully', 'line-green');
+          addSpacer();
+          typeHtml(highlightJson(invoice), 'line-white', 6, function() {
+            addSpacer();
+            addLine('─── done ───', 'line-dim');
+            setStatusRight('ready');
+            sendBtn.disabled = false;
+            paying = false;
+          });
+        }, 2200);
+      });
+    });
+  }
+
+  sendBtn.addEventListener('click', function() {
+    const val = promptInput.value.trim();
+    if (!val) {
+      promptInput.focus();
+      return;
+    }
+    runMock(val);
+  });
+
+  promptInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  injectBtn.addEventListener('click', function() {
+    const demo = 'Web development for Acme Corp, 5 pages, responsive design, contact billing@acme.com';
+    promptInput.value = demo;
+    promptInput.focus();
+  });
+
+  setStatus('⏳ awaiting payment', '');
+  setStatusRight('idle');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InvoiceCraft — AI Invoice Generator</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f2eb;
+  --surface:#fff;
+  --primary:#1a3a3a;
+  --primary-light:#2a5a5a;
+  --accent:#c8a96e;
+  --text:#2c2c2c;
+  --muted:#8c8c8c;
+  --border:#e0d8cc;
+  --success:#10b981;
+  --error:#dc2626;
+  --shadow:rgba(26,58,58,0.06);
+  --heading:Georgia,"Times New Roman",serif;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --mono:"SF Mono","Menlo","Consolas",monospace;
+}
+body{
+  font-family:var(--body);
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.app{max-width:1280px;margin:0 auto;padding:0 40px 64px}
+
+/* Header */
+.top-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:24px 0 16px;border-bottom:1px solid var(--border);
+}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo-icon{
+  width:30px;height:30px;background:var(--primary);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;color:var(--accent);font-weight:700;font-family:var(--heading);
+}
+.logo-text{
+  font-family:var(--heading);font-size:19px;font-weight:700;
+  color:var(--primary);letter-spacing:-0.3px;
+}
+.top-nav{display:flex;align-items:center;gap:28px}
+.top-nav a{
+  font-size:12px;font-weight:500;color:var(--muted);
+  text-decoration:none;text-transform:uppercase;letter-spacing:1px;transition:color .2s;
+}
+.top-nav a:hover{color:var(--primary)}
+.nav-badge{
+  display:inline-block;background:var(--accent);color:#fff;
+  font-size:9px;padding:2px 7px;border-radius:9px;margin-left:5px;font-weight:700;
+}
+
+/* Hero Split */
+.hero{
+  display:grid;grid-template-columns:360px 1fr;gap:44px;margin-top:40px;align-items:start;
+}
+
+/* Left Panel */
+.input-panel{position:sticky;top:32px}
+.input-panel h1{
+  font-family:var(--heading);font-size:38px;font-weight:700;
+  color:var(--primary);line-height:1.1;letter-spacing:-1.2px;
+}
+.subtitle{font-size:14px;color:var(--muted);margin-top:6px;line-height:1.5;max-width:300px}
+.input-group{margin-top:32px}
+.input-group label{
+  display:block;font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:1.5px;color:var(--muted);margin-bottom:7px;
+}
+.input-group textarea{
+  width:100%;min-height:100px;padding:13px 15px;background:var(--surface);
+  border:1px solid var(--border);border-radius:10px;font-family:var(--body);
+  font-size:14px;color:var(--text);resize:vertical;line-height:1.6;
+  transition:border-color .2s,opacity .3s;
+}
+.input-group textarea:focus{
+  outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(200,169,110,.15);
+}
+.input-group textarea::placeholder{color:#b8b0a4}
+[data-state="payment"] .input-group textarea,[data-state="invoice"] .input-group textarea{opacity:.6}
+.generate-row{margin-top:12px}
+.btn-primary{
+  width:100%;padding:12px 24px;background:var(--primary);color:#fff;
+  border:none;border-radius:8px;font-family:var(--body);font-size:14px;
+  font-weight:600;cursor:pointer;transition:all .25s;letter-spacing:.3px;
+}
+.btn-primary:hover{background:#0f2828;transform:translateY(-1px);box-shadow:0 4px 16px rgba(26,58,58,.2)}
+.btn-primary:active{transform:translateY(0)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* Payment Card */
+.payment-card{
+  max-height:0;opacity:0;overflow:hidden;
+  transition:max-height .5s cubic-bezier(.22,1,.36,1),opacity .4s ease,margin .4s ease;
+  margin-top:0;
+}
+[data-state="payment"] .payment-card{
+  max-height:420px;opacity:1;margin-top:16px;
+}
+.payment-card-inner{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:22px 20px;
+}
+.payment-pill{
+  display:inline-block;background:rgba(200,169,110,.12);color:var(--accent);
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;
+  padding:3px 10px;border-radius:10px;margin-bottom:10px;
+}
+.payment-card-inner h3{
+  font-family:var(--heading);font-size:17px;color:var(--primary);font-weight:700;
+}
+.payment-desc{
+  font-size:13px;color:var(--muted);margin-top:4px;line-height:1.5;
+}
+.payment-details{
+  margin-top:14px;background:var(--bg);border-radius:8px;padding:12px 14px;
+}
+.pay-row{
+  display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:13px;
+}
+.pay-row+.pay-row{border-top:1px solid var(--border)}
+.pay-label{color:var(--muted)}
+.pay-value{font-weight:500;color:var(--text)}
+.pay-mono{font-family:var(--mono);font-size:11px;color:var(--primary);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-pay{
+  width:100%;margin-top:14px;padding:13px;background:var(--primary);color:#fff;
+  border:none;border-radius:8px;font-family:var(--body);font-size:14px;
+  font-weight:600;cursor:pointer;transition:all .25s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.btn-pay:hover:not(:disabled){background:#0f2828;transform:translateY(-1px);box-shadow:0 4px 16px rgba(26,58,58,.2)}
+.btn-pay:disabled{opacity:.6;cursor:not-allowed}
+.btn-pay.success{background:var(--success)}
+.btn-pay .lightning{font-size:16px}
+
+/* Input Hint & Features */
+.input-hint{margin-top:12px;font-size:12px;color:var(--muted);line-height:1.5}
+.input-hint strong{color:var(--primary);font-weight:600}
+.features-mini{margin-top:36px;display:flex;flex-direction:column;gap:10px}
+.features-mini .feat{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted)}
+.feat-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0}
+
+/* Preview Section */
+.preview-section{position:relative}
+.preview-header{
+  display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;
+}
+.preview-label{
+  font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:600;
+}
+.preview-actions{display:flex;gap:8px}
+.btn-download{
+  padding:8px 18px;background:var(--accent);color:#fff;
+  border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;
+  transition:all .25s;letter-spacing:.3px;
+}
+.btn-download:hover{background:#b89558;transform:translateY(-1px);box-shadow:0 4px 12px rgba(200,169,110,.3)}
+.btn-download:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* Invoice Card */
+.invoice-wrapper{
+  position:relative;background:var(--surface);border-radius:14px;
+  box-shadow:0 2px 8px var(--shadow),0 8px 32px rgba(26,58,58,.04);
+  overflow:hidden;transition:opacity .5s ease;
+}
+[data-state="input"] .invoice-wrapper{opacity:.6}
+[data-state="payment"] .invoice-wrapper{opacity:.7}
+[data-state="invoice"] .invoice-wrapper{opacity:1}
+.invoice-wrapper::before{
+  content:"Preview";position:absolute;top:16px;right:-30px;
+  background:var(--accent);color:#fff;font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:1.5px;padding:3px 36px;
+  transform:rotate(45deg);z-index:10;opacity:0;transition:opacity .5s ease;
+  pointer-events:none;
+}
+[data-state="invoice"] .invoice-wrapper::before{opacity:.8}
+.invoice{padding:44px 40px 36px;transition:opacity .5s ease}
+
+/* Invoice Letterhead */
+.invoice-header{
+  display:flex;justify-content:space-between;align-items:flex-start;
+  padding-bottom:24px;border-bottom:2px solid var(--border);
+}
+.invoice-issuer h3{
+  font-family:var(--heading);font-size:22px;font-weight:700;
+  color:var(--primary);letter-spacing:-.4px;
+}
+.invoice-issuer p{font-size:12px;color:var(--muted);line-height:1.6;margin-top:3px}
+.invoice-meta{text-align:right}
+.inv-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:600}
+.inv-number{font-family:var(--heading);font-size:17px;font-weight:700;color:var(--primary);margin-top:3px}
+.inv-date{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* Bill To */
+.invoice-parties{
+  display:flex;justify-content:space-between;padding:22px 0;
+}
+.bill-to h4{
+  font-size:10px;text-transform:uppercase;letter-spacing:1.5px;
+  color:var(--muted);font-weight:600;margin-bottom:5px;
+}
+.bill-to p{font-size:13px;color:var(--text);line-height:1.6}
+.bill-to .name{font-weight:600}
+
+/* Table */
+.invoice-table{width:100%;border-collapse:collapse;margin-top:4px}
+.invoice-table thead th{
+  font-size:10px;text-transform:uppercase;letter-spacing:1.5px;
+  color:var(--muted);font-weight:600;text-align:left;
+  padding:10px 8px 9px 0;border-bottom:1px solid var(--border);
+}
+.invoice-table thead th.amt{text-align:right}
+.invoice-table tbody td{
+  padding:12px 8px 12px 0;border-bottom:1px solid #f0ebe3;
+  font-size:13px;color:var(--text);
+}
+.invoice-table tbody td.amt{text-align:right;font-variant-numeric:tabular-nums}
+.invoice-table tbody td.desc{width:50%}
+.invoice-table tbody td.qty{width:10%;color:var(--muted)}
+.invoice-table tbody td.price{width:20%}
+.invoice-table tbody td.total{width:20%;font-weight:500}
+
+/* Totals */
+.invoice-totals{margin-top:20px;margin-left:auto;width:260px}
+.total-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px}
+.total-row .label{color:var(--muted)}
+.total-row .value{font-variant-numeric:tabular-nums}
+.total-row.sub{border-bottom:1px solid var(--border);padding-bottom:9px}
+.total-row.divider{
+  border-top:2px solid var(--primary);margin-top:6px;padding-top:9px;
+  font-weight:700;font-size:15px;
+}
+.total-row.divider .label{color:var(--primary);font-family:var(--heading)}
+.total-row.divider .value{color:var(--primary);font-family:var(--heading)}
+.total-row.tax .value{color:var(--muted)}
+
+/* Footer */
+.invoice-footer{
+  margin-top:28px;padding-top:18px;border-top:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center;
+}
+.invoice-footer p{font-size:11px;color:var(--muted)}
+.invoice-footer strong{color:var(--primary)}
+.payment-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:5px 12px;background:rgba(200,169,110,.12);
+  border-radius:18px;font-size:10px;font-weight:600;color:var(--accent);
+}
+.payment-badge .bolt{font-size:12px}
+
+/* Empty State */
+.invoice-empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.invoice-empty .empty-icon{font-size:40px;opacity:.25;margin-bottom:10px;display:block}
+.invoice-empty h3{font-family:var(--heading);font-size:18px;font-weight:400;color:#c8c0b4}
+.invoice-empty p{font-size:13px;color:#d5cfc4;margin-top:4px}
+
+/* Loading animation */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.btn-pay.loading{position:relative;color:transparent}
+.btn-pay.loading::after{
+  content:"";position:absolute;width:18px;height:18px;
+  top:50%;left:50%;margin:-9px 0 0 -9px;
+  border:2px solid rgba(255,255,255,.3);border-top-color:#fff;
+  border-radius:50%;animation:spin .6s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+[data-state="invoice"] .btn-primary{background:transparent;color:var(--primary);border:1px solid var(--border)}
+[data-state="invoice"] .btn-primary:hover{background:var(--bg);border-color:var(--accent);color:var(--primary);transform:none;box-shadow:none}
+
+/* Receipt toast */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--primary);color:#fff;padding:12px 24px;border-radius:10px;
+  font-size:13px;font-weight:500;opacity:0;transition:all .4s cubic-bezier(.22,1,.36,1);
+  z-index:50;pointer-events:none;box-shadow:0 4px 20px rgba(26,58,58,.2);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Responsive */
+@media(max-width:1024px){
+  .app{padding:0 24px 48px}
+  .hero{grid-template-columns:1fr;gap:28px}
+  .input-panel{position:static}
+  .input-panel h1{font-size:32px}
+}
+@media(max-width:640px){
+  .app{padding:0 16px 32px}
+  .top-bar{flex-direction:column;align-items:flex-start;gap:10px}
+  .top-nav{flex-wrap:wrap;gap:16px}
+  .invoice{padding:24px 18px 20px}
+  .invoice-header{flex-direction:column;gap:14px}
+  .invoice-meta{text-align:left}
+  .invoice-parties{flex-direction:column;gap:16px}
+  .invoice-totals{width:100%}
+  .invoice-footer{flex-direction:column;gap:10px;align-items:flex-start}
+  .hero{margin-top:24px}
+}
+</style>
+</head>
+<body>
+
+<div class="app" data-state="input" role="application">
+
+  <header class="top-bar" role="banner">
+    <div class="logo" aria-label="InvoiceCraft home">
+      <span class="logo-icon" aria-hidden="true">IC</span>
+      <span class="logo-text">InvoiceCraft</span>
+    </div>
+    <nav class="top-nav" aria-label="Main">
+      <a href="#">Invoices</a>
+      <a href="#">Templates</a>
+      <a href="#">API <span class="nav-badge">x402</span></a>
+      <a href="#">Docs</a>
+    </nav>
+  </header>
+
+  <main class="hero">
+
+    <!-- ─── Left: Input Panel ─── -->
+    <section class="input-panel" aria-label="Invoice input">
+      <h1>Create an Invoice</h1>
+      <p class="subtitle">AI-powered invoices with x402 micropayments. Describe the work and get a ready-to-ship invoice in seconds.</p>
+
+      <div class="input-group">
+        <label for="desc">Job Description</label>
+        <textarea id="desc" placeholder="e.g. Brand strategy consultation for early-stage SaaS startup — includes competitor audit, positioning framework, and visual identity direction." rows="4" aria-describedby="descHint">Website redesign for FinFlow — responsive rebuild, CMS integration, and performance optimization.</textarea>
+
+        <div class="generate-row">
+          <button class="btn-primary" id="generateBtn">Generate Invoice</button>
+        </div>
+
+        <!-- Payment Card (inline, slide-in) -->
+        <div class="payment-card" id="paymentCard" role="status" aria-live="polite">
+          <div class="payment-card-inner">
+            <span class="payment-pill">x402 micropayment</span>
+            <h3>Complete Payment</h3>
+            <p class="payment-desc">
+              This invoice requires a <strong>0.50 USDT</strong> micropayment on <strong>X Layer</strong> to unlock.
+            </p>
+            <div class="payment-details">
+              <div class="pay-row">
+                <span class="pay-label">Amount</span>
+                <span class="pay-value">0.50 USDT</span>
+              </div>
+              <div class="pay-row">
+                <span class="pay-label">Network</span>
+                <span class="pay-value">X Layer</span>
+              </div>
+              <div class="pay-row">
+                <span class="pay-label">Challenge ID</span>
+                <span class="pay-value pay-mono" id="challengeId">0x7a3f...c9e2</span>
+              </div>
+            </div>
+            <button class="btn-pay" id="payBtn">
+              <span class="lightning" aria-hidden="true">⚡</span>
+              Simulate Payment
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <p class="input-hint" id="descHint"><strong>Pro tip:</strong> Mention the client name and email for automatic extraction.</p>
+
+      <div class="features-mini">
+        <div class="feat"><span class="feat-dot"></span> AI-generated line items &amp; pricing</div>
+        <div class="feat"><span class="feat-dot"></span> Pay-per-invoice with x402</div>
+        <div class="feat"><span class="feat-dot"></span> Download as PDF or share instantly</div>
+      </div>
+    </section>
+
+    <!-- ─── Right: Invoice Preview ─── -->
+    <section class="preview-section" aria-label="Invoice preview">
+      <div class="preview-header">
+        <span class="preview-label">Invoice Preview</span>
+        <div class="preview-actions">
+          <button class="btn-download" id="downloadBtn" hidden>Download PDF</button>
+        </div>
+      </div>
+
+      <div class="invoice-wrapper" id="invoiceWrapper">
+
+        <div class="invoice" id="invoiceContent">
+          <!-- Letterhead -->
+          <div class="invoice-header">
+            <div class="invoice-issuer">
+              <h3>InvoiceCraft AI</h3>
+              <p>548 Market St, PMB 72291<br>San Francisco, CA 94104<br>support@invoicecraft.ai</p>
+            </div>
+            <div class="invoice-meta" aria-label="Invoice number and date">
+              <div class="inv-label">Invoice</div>
+              <div class="inv-number" id="invNumber">—</div>
+              <div class="inv-date" id="invDate">—</div>
+            </div>
+          </div>
+
+          <!-- Bill To -->
+          <div class="invoice-parties">
+            <div class="bill-to">
+              <h4>Bill To</h4>
+              <p><span class="name" id="clientName">—</span><br><span id="clientEmail">—</span></p>
+            </div>
+            <div class="bill-to">
+              <h4>Payment Terms</h4>
+              <p id="paymentTerms">—</p>
+            </div>
+          </div>
+
+          <!-- Line Items Table -->
+          <table class="invoice-table" aria-label="Invoice line items">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th class="qty amt">Qty</th>
+                <th class="amt">Price</th>
+                <th class="amt">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="invoiceItems">
+              <tr>
+                <td class="desc" colspan="4" style="text-align:center;color:#c8c0b4;padding:28px 0;font-size:13px;">
+                  Describe your project and generate an invoice
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Totals -->
+          <div class="invoice-totals">
+            <div class="total-row sub">
+              <span class="label">Subtotal</span>
+              <span class="value" id="subtotal">$0.00</span>
+            </div>
+            <div class="total-row tax">
+              <span class="label">Tax (8%)</span>
+              <span class="value" id="tax">$0.00</span>
+            </div>
+            <div class="total-row divider">
+              <span class="label">Total Due</span>
+              <span class="value" id="totalDue">$0.00</span>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="invoice-footer">
+            <p>
+              <strong>Payment:</strong> <span id="footerAddress">0x...</span> on X Layer<br>
+              <span>Generated by InvoiceCraft</span>
+            </p>
+            <div class="payment-badge" aria-label="x402 payment enabled">
+              <span class="bolt" aria-hidden="true">⚡</span> x402
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
