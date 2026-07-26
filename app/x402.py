@@ -150,6 +150,15 @@ def verify_payment(
     else:
         result = {"verified": True, "confirmations": 1, "mode": "mock"}
 
-    if result.get("verified") and challenge_id:
-        challenge_store.consume(challenge_id)
+    if result.get("verified"):
+        # Reject replay of an on-chain payment already spent on another invoice.
+        if store.tx_consumed(tx_hash):
+            return {
+                "verified": False,
+                "confirmations": result.get("confirmations", 0),
+                "reason": "tx_already_used",
+            }
+        if challenge_id:
+            challenge_store.consume(challenge_id)
+        store.consume_tx(tx_hash)
     return result

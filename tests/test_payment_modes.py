@@ -22,6 +22,16 @@ def test_challenge_is_consumed_after_use(monkeypatch):
     assert verify_payment(tx_hash=GOOD_TX, challenge_id=cid)["verified"] is False
 
 
+def test_tx_cannot_be_reused(monkeypatch):
+    monkeypatch.setenv("PAYMENT_VERIFY_MODE", "mock")
+    tx = "0x" + "02" * 32
+    assert verify_payment(tx, generate_challenge())["verified"] is True
+    # Same on-chain payment, a fresh challenge — must be rejected as a replay.
+    replay = verify_payment(tx, generate_challenge())
+    assert replay["verified"] is False
+    assert replay["reason"] == "tx_already_used"
+
+
 def test_bad_tx_format_rejected(monkeypatch):
     monkeypatch.setenv("PAYMENT_VERIFY_MODE", "mock")
     cid = generate_challenge()

@@ -10,12 +10,16 @@ import time
 # Backed by SQLite so state survives process restarts and is consistent across
 # workers on a single host (fixes the previous per-process in-memory store,
 # which dropped challenges and reset invoice numbers on every restart / worker).
-_DB_PATH = os.getenv("DB_PATH", os.path.join(tempfile.gettempdir(), "invoicecraft.db"))
 _lock = threading.Lock()
 
 
+def _db_path() -> str:
+    # Read at call time so tests (and redeploys) can point at a fresh DB.
+    return os.getenv("DB_PATH", os.path.join(tempfile.gettempdir(), "invoicecraft.db"))
+
+
 def _conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn = sqlite3.connect(_db_path(), timeout=10)
     conn.execute(
         "CREATE TABLE IF NOT EXISTS challenges "
         "(id TEXT PRIMARY KEY, created REAL NOT NULL, used INTEGER NOT NULL DEFAULT 0)"
@@ -23,7 +27,39 @@ def _conn() -> sqlite3.Connection:
     conn.execute(
         "CREATE TABLE IF NOT EXISTS counters (day TEXT PRIMARY KEY, n INTEGER NOT NULL)"
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS used_txs (tx TEXT PRIMARY KEY, created REAL NOT NULL)"
+    )
     return conn
+
+
+def tx_consumed(tx_hash: str) -> bool:
+    if not tx_hash:
+        return False
+    key = tx_hash.lower()
+    with _lock:
+        conn = _conn()
+        try:
+            row = conn.execute("SELECT 1 FROM used_txs WHERE tx = ?", (key,)).fetchone()
+        finally:
+            conn.close()
+    return row is not None
+
+
+def consume_tx(tx_hash: str) -> None:
+    if not tx_hash:
+        return
+    key = tx_hash.lower()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO used_txs (tx, created) VALUES (?, ?)",
+                (key, time.time()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def add_challenge(challenge_id: str) -> None:
