@@ -81,7 +81,7 @@ def _normalize(payload: dict) -> Optional[dict]:
     }
 
 
-def _call_anthropic(url, api_key, model, user_content, timeout):
+def _call_anthropic(url, api_key, model, user_content, timeout, max_tokens):
     resp = httpx.post(
         url,
         headers={
@@ -91,7 +91,7 @@ def _call_anthropic(url, api_key, model, user_content, timeout):
         },
         json={
             "model": model,
-            "max_tokens": 1024,
+            "max_tokens": max_tokens,
             "system": _SYSTEM,
             "messages": [{"role": "user", "content": user_content}],
         },
@@ -100,7 +100,7 @@ def _call_anthropic(url, api_key, model, user_content, timeout):
     return resp, (lambda d: d["content"][0]["text"])
 
 
-def _call_openai(url, api_key, model, user_content, timeout):
+def _call_openai(url, api_key, model, user_content, timeout, max_tokens):
     # OpenAI-compatible: DeepSeek, OpenRouter, OpenCode, Together, Groq, etc.
     resp = httpx.post(
         url,
@@ -110,7 +110,7 @@ def _call_openai(url, api_key, model, user_content, timeout):
         },
         json={
             "model": model,
-            "max_tokens": 1024,
+            "max_tokens": max_tokens,
             "messages": [
                 {"role": "system", "content": _SYSTEM},
                 {"role": "user", "content": user_content},
@@ -135,6 +135,9 @@ def parse_with_ai(description: str) -> Optional[dict]:
     model = os.getenv("LLM_MODEL", "claude-sonnet-5")
     style = os.getenv("LLM_API_STYLE", "anthropic").lower()
     timeout = float(os.getenv("LLM_TIMEOUT", "30"))
+    # Reasoning models (e.g. DeepSeek) spend tokens thinking before the answer,
+    # so keep this generous or `content` comes back empty (finish_reason=length).
+    max_tokens = int(os.getenv("LLM_MAX_TOKENS", "4096"))
     user_content = f"{_SCHEMA_HINT}\n\nJob description:\n{description}"
 
     if style == "openai":
@@ -145,7 +148,7 @@ def parse_with_ai(description: str) -> Optional[dict]:
         caller = _call_anthropic
 
     try:
-        resp, extract = caller(url, api_key, model, user_content, timeout)
+        resp, extract = caller(url, api_key, model, user_content, timeout, max_tokens)
         if resp.status_code >= 400:
             logger.warning(
                 "AI parse HTTP %s from LLM (style=%s model=%s): %s; using heuristic parser",
