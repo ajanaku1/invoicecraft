@@ -1,6 +1,14 @@
 (function () {
   'use strict';
 
+  // API base: explicit override wins, else same-origin when served over HTTP,
+  // else local dev server. Set window.INVOICECRAFT_API for a deployed backend.
+  var API_BASE =
+    (window.INVOICECRAFT_API ||
+      (location.origin && location.origin.indexOf('http') === 0
+        ? location.origin
+        : 'http://localhost:8000')).replace(/\/$/, '');
+
   var STATE = { INPUT: 'input', PAYMENT: 'payment', INVOICE: 'invoice' };
   var currentState = STATE.INPUT;
 
@@ -22,25 +30,44 @@
   var taxEl = document.getElementById('tax');
   var totalDue = document.getElementById('totalDue');
   var footerAddress = document.getElementById('footerAddress');
+  var taxLabelEl = document.querySelector('.total-row.tax .label');
+  var connectBtn = document.getElementById('connectBtn');
+  var walletChip = document.getElementById('walletChip');
+  var walletAddr = document.getElementById('walletAddr');
+  var payNote = document.getElementById('payNote');
 
   var toastTimer = null;
+  // Live payment/invoice context returned by the backend.
+  var session = { payment: null, invoice: null, pdf: null };
+  var wallet = { account: null };
 
-  function randHex(len) {
-    var h = '0123456789abcdef';
-    var s = '';
-    for (var i = 0; i < len; i++) s += h[Math.floor(Math.random() * 16)];
-    return s;
+  function getProvider() {
+    return window.okxwallet || window.ethereum || null;
   }
 
-  function formatCurrency(n) {
+  function fmtMoney(str) {
+    var n = parseFloat(str);
+    if (isNaN(n)) return '$0.00';
     return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function shortHex(str) {
+    if (!str) return '—';
+    return str.length > 16 ? str.slice(0, 10) + '…' + str.slice(-4) : str;
+  }
+
+  function randTxHash() {
+    var h = '0123456789abcdef';
+    var s = '0x';
+    for (var i = 0; i < 64; i++) s += h[Math.floor(Math.random() * 16)];
+    return s;
   }
 
   function showToast(message) {
     if (toastTimer) clearTimeout(toastTimer);
     toast.textContent = message;
     toast.classList.add('show');
-    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 3000);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 3200);
   }
 
   function setState(state) {
@@ -56,15 +83,13 @@
         payBtn.disabled = false;
         payBtn.className = 'btn-pay';
         payBtn.innerHTML =
-          '<span class="lightning" aria-hidden="true">⚡</span> Simulate Payment';
+          '<span class="lightning" aria-hidden="true">⚡</span> Pay 0.50 USDT';
         break;
       case STATE.PAYMENT:
-        generateBtn.textContent = 'Generating...';
+        generateBtn.textContent = 'Awaiting payment…';
         generateBtn.disabled = true;
         downloadBtn.hidden = true;
         textarea.disabled = true;
-        challengeIdEl.textContent =
-          '0x' + randHex(8) + '...' + randHex(4);
         setTimeout(function () { payBtn.focus(); }, 100);
         break;
       case STATE.INVOICE:
@@ -77,75 +102,53 @@
     }
   }
 
-  function parseDescription(text) {
-    text = text.trim();
-    var name = 'Client';
-    var email = 'client@example.com';
-
-    if (/Acme Corp/i.test(text)) {
-      name = 'Acme Corp';
-    } else {
-      var m = text.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+){0,2})/);
-      if (m) name = m[1];
-    }
-
-    var emailMatch = text.match(
-      /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/
-    );
-    if (emailMatch) email = emailMatch[1];
-
-    var summary = text.length > 80 ? text.slice(0, 80) + '...' : text;
-    return { clientName: name, clientEmail: email, summary: summary };
-  }
-
-  function generateInvoiceNumber() {
-    var now = new Date();
-    var y = now.getFullYear();
-    var m = String(now.getMonth() + 1).padStart(2, '0');
-    var d = String(now.getDate()).padStart(2, '0');
-    var n = String(Math.floor(Math.random() * 900) + 100);
-    return 'INV-' + y + m + d + '-' + n;
-  }
-
-  function populateInvoice(parsed) {
-    var num = generateInvoiceNumber();
-    invNumber.textContent = num;
+  function renderInvoice(invoice) {
+    invNumber.textContent = invoice.invoice_number;
 
     var now = new Date();
-    var due = new Date(now);
-    due.setDate(due.getDate() + 15);
-    var fmt = function (d) {
+    var fmtDate = function (d) {
       return d.toLocaleDateString('en-US', {
         month: 'long', day: 'numeric', year: 'numeric'
       });
     };
-    invDate.textContent = 'Issued: ' + fmt(now);
+    invDate.textContent = 'Issued: ' + fmtDate(now);
     paymentTerms.innerHTML =
-      'Net 15 &middot; Due: ' + fmt(due) +
-      '<br><span style="font-size:11px;color:var(--muted);">x402 micropayment enabled</span>';
+      'Due: ' + invoice.due_date +
+      '<br><span style="font-size:11px;color:var(--muted);">' +
+      'Status: ' + (invoice.status || '').toUpperCase() +
+      ' · x402 settled</span>';
 
-    clientNameEl.textContent = parsed.clientName;
-    clientEmailEl.textContent = parsed.clientEmail;
-
-    var amount = 500;
-    var taxRate = 0.08;
-    var tax = amount * taxRate;
-    var total = amount + tax;
+    clientNameEl.textContent = invoice.client.name;
+    clientEmailEl.textContent = invoice.client.email;
 
     invoiceItems.innerHTML = '';
-    var tr = document.createElement('tr');
-    tr.innerHTML =
-      '<td class="desc">' + parsed.summary + '</td>' +
-      '<td class="qty amt">1</td>' +
-      '<td class="price amt">' + formatCurrency(amount) + '</td>' +
-      '<td class="total amt">' + formatCurrency(amount) + '</td>';
-    invoiceItems.appendChild(tr);
+    invoice.line_items.forEach(function (item) {
+      var tr = document.createElement('tr');
+      var descCell = document.createElement('td');
+      descCell.className = 'desc';
+      descCell.textContent = item.description;
+      var qtyCell = document.createElement('td');
+      qtyCell.className = 'qty amt';
+      qtyCell.textContent = item.quantity;
+      var priceCell = document.createElement('td');
+      priceCell.className = 'price amt';
+      priceCell.textContent = fmtMoney(item.unit_price);
+      var amtCell = document.createElement('td');
+      amtCell.className = 'total amt';
+      amtCell.textContent = fmtMoney(item.amount);
+      tr.appendChild(descCell);
+      tr.appendChild(qtyCell);
+      tr.appendChild(priceCell);
+      tr.appendChild(amtCell);
+      invoiceItems.appendChild(tr);
+    });
 
-    subtotalEl.textContent = formatCurrency(amount);
-    taxEl.textContent = formatCurrency(tax);
-    totalDue.textContent = formatCurrency(total);
-    footerAddress.textContent =
-      '0x' + randHex(6) + '...' + randHex(4);
+    var taxPct = Math.round(parseFloat(invoice.tax_rate) * 100);
+    if (taxLabelEl) taxLabelEl.textContent = 'Tax (' + taxPct + '%)';
+    subtotalEl.textContent = fmtMoney(invoice.subtotal);
+    taxEl.textContent = fmtMoney(invoice.tax_amount);
+    totalDue.textContent = fmtMoney(invoice.total);
+    footerAddress.textContent = shortHex(invoice.issuer.address);
   }
 
   function resetInvoice() {
@@ -161,58 +164,264 @@
     taxEl.textContent = '$0.00';
     totalDue.textContent = '$0.00';
     footerAddress.textContent = '0x...';
+    session = { payment: null, invoice: null, pdf: null };
   }
 
-  function handleGenerate() {
-    if (currentState === STATE.INPUT) {
-      var text = textarea.value.trim();
-      if (!text) {
-        showToast('Please describe the work to generate an invoice.');
-        textarea.focus();
-        return;
-      }
-      setState(STATE.PAYMENT);
-    } else if (currentState === STATE.INVOICE) {
-      resetInvoice();
-      setState(STATE.INPUT);
+  // ── Wallet (EIP-1193) ──────────────────────────────────────────────
+
+  function updateWalletUI() {
+    if (wallet.account) {
+      walletChip.hidden = false;
+      walletAddr.textContent = shortHex(wallet.account);
+      connectBtn.classList.add('connected');
+      connectBtn.textContent = 'Wallet Connected';
+    } else {
+      walletChip.hidden = true;
+      connectBtn.classList.remove('connected');
+      connectBtn.textContent = 'Connect Wallet';
     }
   }
 
+  function ensureChain(provider, chainIdHex) {
+    return provider
+      .request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }] })
+      .catch(function (err) {
+        if (err && err.code === 4902) {
+          var rpc = session.payment && session.payment.rpc_url;
+          return provider.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: chainIdHex,
+              chainName: 'X Layer',
+              nativeCurrency: { name: 'OKB', symbol: 'OKB', decimals: 18 },
+              rpcUrls: rpc ? [rpc] : ['https://rpc.xlayer.tech'],
+              blockExplorerUrls: ['https://www.oklink.com/xlayer']
+            }]
+          });
+        }
+        throw err;
+      });
+  }
+
+  function connectWallet() {
+    var provider = getProvider();
+    if (!provider) {
+      showToast('No Web3 wallet found. Install OKX Wallet or MetaMask.');
+      return;
+    }
+    connectBtn.disabled = true;
+    connectBtn.textContent = 'Connecting…';
+    provider.request({ method: 'eth_requestAccounts' })
+      .then(function (accounts) {
+        wallet.account = accounts && accounts[0];
+        updateWalletUI();
+        showToast('Wallet connected: ' + shortHex(wallet.account));
+      })
+      .catch(function () {
+        showToast('Wallet connection was rejected.');
+        updateWalletUI();
+      })
+      .then(function () { connectBtn.disabled = false; });
+  }
+
+  function pad32(hex) {
+    hex = hex.replace(/^0x/, '').toLowerCase();
+    while (hex.length < 64) hex = '0' + hex;
+    return hex;
+  }
+
+  // Build ERC-20 transfer(receiver, amount) calldata and send it.
+  function payWithWallet(payment) {
+    var provider = getProvider();
+    var chainId = payment.chain_id || '0xc4';
+    var units = BigInt(Math.round(parseFloat(payment.amount) * Math.pow(10, payment.decimals || 6)));
+    var data = '0xa9059cbb' + pad32(payment.receiver) + pad32(units.toString(16));
+    return ensureChain(provider, chainId).then(function () {
+      return provider.request({
+        method: 'eth_sendTransaction',
+        params: [{ from: wallet.account, to: payment.token_contract, data: data }]
+      });
+    });
+  }
+
+  function requestChallenge(description) {
+    return fetch(API_BASE + '/api/v1/invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: description })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { status: res.status, data: data };
+      });
+    });
+  }
+
+  function requestInvoice(description, txHash, challengeId) {
+    return fetch(API_BASE + '/api/v1/invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description: description,
+        payment_tx_hash: txHash,
+        challenge_id: challengeId
+      })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { status: res.status, data: data };
+      });
+    });
+  }
+
+  function handleGenerate() {
+    if (currentState === STATE.INVOICE) {
+      resetInvoice();
+      setState(STATE.INPUT);
+      return;
+    }
+    if (currentState !== STATE.INPUT) return;
+
+    var text = textarea.value.trim();
+    if (!text) {
+      showToast('Please describe the work to generate an invoice.');
+      textarea.focus();
+      return;
+    }
+
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Requesting…';
+
+    requestChallenge(text).then(function (res) {
+      if (res.status === 402 && res.data.payment) {
+        session.payment = res.data.payment;
+        challengeIdEl.textContent = shortHex(session.payment.challenge_id);
+        var canPayOnChain = !!session.payment.token_contract;
+        payNote.textContent = canPayOnChain
+          ? 'Connect a wallet to pay 0.50 USDT on X Layer.'
+          : 'Demo mode: payment is simulated (no USDT contract configured).';
+        setState(STATE.PAYMENT);
+      } else if (res.status === 400) {
+        showToast(res.data.message || 'Invalid description.');
+        setState(STATE.INPUT);
+      } else if (res.status === 500) {
+        showToast(res.data.message || 'Server not configured (ASP_WALLET).');
+        setState(STATE.INPUT);
+      } else {
+        showToast('Unexpected response (' + res.status + ').');
+        setState(STATE.INPUT);
+      }
+    }).catch(function () {
+      showToast('Cannot reach the API at ' + API_BASE + '.');
+      setState(STATE.INPUT);
+    });
+  }
+
+  function resetPayButton() {
+    payBtn.disabled = false;
+    payBtn.className = 'btn-pay';
+    payBtn.innerHTML =
+      '<span class="lightning" aria-hidden="true">⚡</span> Pay 0.50 USDT';
+  }
+
+  function submitPayment(txHash) {
+    var text = textarea.value.trim();
+    requestInvoice(text, txHash, session.payment.challenge_id).then(function (res) {
+      payBtn.classList.remove('loading');
+      if (res.status === 200 && res.data.invoice) {
+        session.invoice = res.data.invoice;
+        session.pdf = res.data.pdf;
+        renderInvoice(res.data.invoice);
+        payBtn.classList.add('success');
+        payBtn.innerHTML = '&#10003; Payment Settled';
+        showToast('Invoice generated — payment settled on X Layer');
+        setTimeout(function () {
+          setState(STATE.INVOICE);
+          setTimeout(resetPayButton, 400);
+        }, 700);
+      } else {
+        resetPayButton();
+        var msg = (res.data && res.data.message) || 'Payment not verified.';
+        showToast(msg + ' Send 0.50 USDT on X Layer, then retry.');
+      }
+    }).catch(function () {
+      payBtn.classList.remove('loading');
+      resetPayButton();
+      showToast('Cannot reach the API at ' + API_BASE + '.');
+    });
+  }
+
   function handlePay() {
-    if (currentState !== STATE.PAYMENT) return;
-    if (payBtn.disabled) return;
+    if (currentState !== STATE.PAYMENT || payBtn.disabled || !session.payment) return;
+
+    var payment = session.payment;
+    var canPayOnChain = !!payment.token_contract;
 
     payBtn.disabled = true;
     payBtn.classList.add('loading');
     payBtn.innerHTML = '';
 
-    setTimeout(function () {
-      payBtn.classList.remove('loading');
-      payBtn.classList.add('success');
-      payBtn.innerHTML = '&#10003; Payment Successful';
-      showToast('Invoice unlocked — payment simulated');
-
-      var parsed = parseDescription(textarea.value.trim());
-      populateInvoice(parsed);
-
-      setTimeout(function () {
-        setState(STATE.INVOICE);
-        setTimeout(function () {
-          payBtn.className = 'btn-pay';
-          payBtn.disabled = false;
-          payBtn.innerHTML =
-            '<span class="lightning" aria-hidden="true">⚡</span> Simulate Payment';
-        }, 400);
-      }, 700);
-    }, 1600);
+    if (canPayOnChain) {
+      // Real payment: require a connected wallet, then send USDT on X Layer and
+      // submit the resulting tx hash for on-chain verification.
+      if (!wallet.account) {
+        payBtn.classList.remove('loading');
+        resetPayButton();
+        showToast('Connect a wallet first to pay on-chain.');
+        return;
+      }
+      payWithWallet(payment)
+        .then(function (txHash) {
+          showToast('Payment sent: ' + shortHex(txHash) + ' — verifying…');
+          submitPayment(txHash);
+        })
+        .catch(function (err) {
+          payBtn.classList.remove('loading');
+          resetPayButton();
+          var reason = (err && err.message) ? err.message : 'transaction rejected';
+          showToast('Payment failed: ' + reason);
+        });
+    } else {
+      // Demo mode: backend runs mock verification, so a well-formed hash unlocks
+      // the real invoice + PDF without moving funds.
+      submitPayment(randTxHash());
+    }
   }
 
   function handleDownload() {
-    showToast('PDF download would start here. (Mock)');
+    if (!session.pdf) {
+      showToast('Generate an invoice first.');
+      return;
+    }
+    try {
+      var binary = atob(session.pdf);
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      var blob = new Blob([bytes], { type: 'application/pdf' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download =
+        (session.invoice ? session.invoice.invoice_number : 'invoice') + '.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      showToast('PDF downloaded.');
+    } catch (e) {
+      showToast('Could not build the PDF file.');
+    }
   }
 
   generateBtn.addEventListener('click', handleGenerate);
+  connectBtn.addEventListener('click', connectWallet);
   payBtn.addEventListener('click', handlePay);
+
+  var _p = getProvider();
+  if (_p && _p.on) {
+    _p.on('accountsChanged', function (accounts) {
+      wallet.account = accounts && accounts[0] || null;
+      updateWalletUI();
+    });
+  }
   downloadBtn.addEventListener('click', handleDownload);
 
   setState(STATE.INPUT);
