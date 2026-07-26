@@ -13,3 +13,17 @@ services:
         value: invoice@craft.dev
       - key: TAX_RATE
         value: "0.08"
+      # Payment verification: "mock" (demo, accepts well-formed tx hashes) or
+      # "onchain" (real USDT verification via web3 — requires the vars below).
+      - key: PAYMENT_VERIFY_MODE
+        value: mock
+      - key: XLAYER_RPC
+        sync: false
+      - key: USDT_CONTRACT
+        sync: false
+      # AI parsing: set LLM_API_KEY to enable LLM line-item extraction.
+      # Without it, the service uses the built-in heuristic parser.
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: claude-sonnet-5
