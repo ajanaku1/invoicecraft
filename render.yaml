@@ -2,8 +2,10 @@ services:
   - type: web
     name: invoicecraft
     env: python
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
       - key: ASP_WALLET
         sync: false
