@@ -93,7 +93,9 @@ When the OKX credentials are absent (local dev, tests, demo), the service falls 
 }
 ```
 
-An x402 client (the OKX Agentic Wallet, or any SDK client) pays and retries the same request with a `PAYMENT-SIG` header; no second body shape is needed. The fields below describe the fallback flow used when OKX credentials are not configured.
+An x402 client pays and retries the same request with a `PAYMENT-SIGNATURE` header; no second body shape is needed. The demo dashboard ships one in `dashboard/x402-client.js`: it decodes the requirements, signs an EIP-3009 `TransferWithAuthorization` with the connected wallet (`eth_signTypedData_v4`, so the payer spends no gas), and replays the request with the header. The OKX Agentic Wallet does the same thing automatically.
+
+The fields below describe the fallback flow used when OKX credentials are not configured.
 
 **Request** (second call, after payment):
 ```json
@@ -209,7 +211,7 @@ Browser (dashboard) ──POST──> FastAPI app (app/main.py)
 python3 -m pytest -q
 ```
 
-38 tests cover description parsing, tax and totals, PDF generation, the x402 challenge lifecycle, the OKX Payment SDK middleware, and the full request/response flow. Requires Python 3.11+ (an OKX Payment SDK constraint).
+40 tests cover description parsing, tax and totals, PDF generation, the x402 challenge lifecycle, the OKX Payment SDK middleware, the browser x402 client's EIP-712 payload, and the full request/response flow. Requires Python 3.11+ (an OKX Payment SDK constraint).
 
 ---
 

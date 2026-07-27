@@ -249,13 +249,8 @@
   // PAYMENT-REQUIRED header with an empty body; the fallback challenge repeats
   // them in the body. Read the header first, then fall back to the body.
   function readPaymentRequirements(res, data) {
-    var header = res.headers.get('payment-required');
-    if (!header) return data;
-    try {
-      return JSON.parse(decodeURIComponent(escape(atob(header))));
-    } catch (e) {
-      return data;
-    }
+    var header = res.headers.get(X402Client.PAYMENT_REQUIRED_HEADER);
+    return X402Client.decodeRequirements(header) || data;
   }
 
   function requestChallenge(description) {
@@ -268,6 +263,36 @@
         return { status: res.status, data: readPaymentRequirements(res, data) };
       });
     });
+  }
+
+  // OKX Payment SDK flow: sign the advertised requirements and replay the same
+  // request with the PAYMENT-SIGNATURE header. The SDK verifies and settles it
+  // through the facilitator, so no tx hash is submitted.
+  function requestInvoiceSigned(description, paymentHeader) {
+    var headers = { 'Content-Type': 'application/json' };
+    headers[X402Client.PAYMENT_SIGNATURE_HEADER] = paymentHeader;
+    return fetch(API_BASE + '/api/v1/invoice', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ description: description })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { status: res.status, data: data };
+      });
+    });
+  }
+
+  function payWithSignature() {
+    var provider = getProvider();
+    var requirements = session.requirements;
+    return ensureChain(provider, session.payment.chainIdHex)
+      .then(function () {
+        return X402Client.signPayment(provider, requirements, wallet.account);
+      })
+      .then(function (paymentHeader) {
+        showToast('Authorization signed — settling through OKX…');
+        return requestInvoiceSigned(textarea.value.trim(), paymentHeader);
+      });
   }
 
   function requestInvoice(description, txHash) {
@@ -306,6 +331,7 @@
     requestChallenge(text).then(function (res) {
       var accept = res.data && res.data.accepts && res.data.accepts[0];
       if (res.status === 402 && accept) {
+        session.requirements = res.data;
         var decimals = 6;
         session.payment = {
           payTo: accept.payTo,
@@ -318,9 +344,16 @@
         };
         challengeIdEl.textContent = shortHex(accept.payTo);
         var canPayOnChain = !!accept.asset;
-        payNote.textContent = canPayOnChain
-          ? 'Connect a wallet to pay ' + session.payment.amountDisplay + ' USD₮0 on X Layer.'
-          : 'Demo mode: payment is simulated (no asset configured).';
+        if (!canPayOnChain) {
+          payNote.textContent = 'Demo mode: payment is simulated (no asset configured).';
+        } else if (usesPaymentSdk) {
+          payNote.textContent =
+            'Connect a wallet to authorize ' + session.payment.amountDisplay +
+            ' USD₮0 on X Layer — OKX settles it for you, no gas.';
+        } else {
+          payNote.textContent =
+            'Connect a wallet to pay ' + session.payment.amountDisplay + ' USD₮0 on X Layer.';
+        }
         setState(STATE.PAYMENT);
       } else if (res.status === 400) {
         showToast(res.data.message || 'Invalid description.');
@@ -345,31 +378,36 @@
       '<span class="lightning" aria-hidden="true">⚡</span> Pay 0.50 USDT';
   }
 
-  function submitPayment(txHash) {
-    var text = textarea.value.trim();
-    requestInvoice(text, txHash).then(function (res) {
-      payBtn.classList.remove('loading');
-      if (res.status === 200 && res.data.invoice) {
-        session.invoice = res.data.invoice;
-        session.pdf = res.data.pdf;
-        renderInvoice(res.data.invoice);
-        payBtn.classList.add('success');
-        payBtn.innerHTML = '&#10003; Payment Settled';
-        showToast('Invoice generated — payment settled on X Layer');
-        setTimeout(function () {
-          setState(STATE.INVOICE);
-          setTimeout(resetPayButton, 400);
-        }, 700);
-      } else {
-        resetPayButton();
-        var msg = (res.data && res.data.message) || 'Payment not verified.';
-        showToast(msg + ' Send 0.50 USDT on X Layer, then retry.');
-      }
-    }).catch(function () {
-      payBtn.classList.remove('loading');
+  function renderInvoiceResponse(res) {
+    payBtn.classList.remove('loading');
+    if (res.status === 200 && res.data.invoice) {
+      session.invoice = res.data.invoice;
+      session.pdf = res.data.pdf;
+      renderInvoice(res.data.invoice);
+      payBtn.classList.add('success');
+      payBtn.innerHTML = '&#10003; Payment Settled';
+      showToast('Invoice generated — payment settled on X Layer');
+      setTimeout(function () {
+        setState(STATE.INVOICE);
+        setTimeout(resetPayButton, 400);
+      }, 700);
+    } else {
       resetPayButton();
-      showToast('Cannot reach the API at ' + API_BASE + '.');
-    });
+      var msg = (res.data && res.data.message) || 'Payment not verified.';
+      showToast(msg + ' Send 0.50 USDT on X Layer, then retry.');
+    }
+  }
+
+  function handlePaymentError() {
+    payBtn.classList.remove('loading');
+    resetPayButton();
+    showToast('Cannot reach the API at ' + API_BASE + '.');
+  }
+
+  function submitPayment(txHash) {
+    requestInvoice(textarea.value.trim(), txHash)
+      .then(renderInvoiceResponse)
+      .catch(handlePaymentError);
   }
 
   function handlePay() {
@@ -383,14 +421,28 @@
     payBtn.innerHTML = '';
 
     if (canPayOnChain) {
-      // Real payment: require a connected wallet, then send USDT on X Layer and
-      // submit the resulting tx hash for on-chain verification.
+      // Real payment: require a connected wallet.
       if (!wallet.account) {
         payBtn.classList.remove('loading');
         resetPayButton();
         showToast('Connect a wallet first to pay on-chain.');
         return;
       }
+
+      if (usesPaymentSdk) {
+        // x402: sign an EIP-3009 authorization; OKX pulls the funds on settle.
+        payWithSignature()
+          .then(renderInvoiceResponse)
+          .catch(function (err) {
+            payBtn.classList.remove('loading');
+            resetPayButton();
+            var reason = (err && err.message) ? err.message : 'signature rejected';
+            showToast('Payment failed: ' + reason);
+          });
+        return;
+      }
+
+      // Fallback: send USDT on X Layer and submit the tx hash for verification.
       payWithWallet(payment)
         .then(function (txHash) {
           showToast('Payment sent: ' + shortHex(txHash) + ' — verifying…');
@@ -433,6 +485,21 @@
       showToast('Could not build the PDF file.');
     }
   }
+
+  // Which payment flow the backend is running: the official OKX Payment SDK
+  // (sign an EIP-3009 authorization, retry with PAYMENT-SIGNATURE) or the
+  // fallback challenge (transfer USDT, submit the tx hash).
+  var usesPaymentSdk = false;
+
+  function loadPaymentMode() {
+    fetch(API_BASE + '/health')
+      .then(function (r) { return r.json(); })
+      .then(function (h) {
+        usesPaymentSdk = !!h && h.payment_sdk === 'okxweb3-app-x402';
+      })
+      .catch(function () {});
+  }
+  loadPaymentMode();
 
   function loadStats() {
     fetch(API_BASE + '/stats')
