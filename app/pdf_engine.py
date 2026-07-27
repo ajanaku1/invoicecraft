@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import html
+import logging
 from datetime import date
 from io import BytesIO
 
@@ -9,6 +12,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
+    Image,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -18,12 +22,63 @@ from reportlab.platypus import (
 
 from app.models import Invoice
 
+logger = logging.getLogger(__name__)
+
+# Refuse oversized uploads before handing bytes to the image decoder.
+MAX_LOGO_BYTES = 2 * 1024 * 1024
+LOGO_MAX_WIDTH = 1.6 * inch
+LOGO_MAX_HEIGHT = 0.7 * inch
+
+_CURRENCY_SYMBOLS = {
+    "USD": "$", "EUR": "€", "GBP": "£", "JPY": "¥", "CNY": "¥",
+    "NGN": "₦", "INR": "₹", "CAD": "C$", "AUD": "A$", "CHF": "CHF ",
+    "BRL": "R$", "ZAR": "R", "AED": "AED ", "SGD": "S$",
+}
+
 
 def _escape(text: str) -> str:
     return html.escape(text, quote=True)
 
 
+def _symbol(currency: str) -> str:
+    """Currency symbol, falling back to the code itself (e.g. "SEK 120.00")."""
+    code = (currency or "USD").upper()
+    return _CURRENCY_SYMBOLS.get(code, f"{code} ")
+
+
+def _decode_logo(logo: str) -> bytes | None:
+    """Decode a data: URL or bare base64 logo, or None if it is unusable."""
+    payload = logo.split(",", 1)[1] if logo.startswith("data:") else logo
+    try:
+        raw = base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError):
+        logger.warning("Logo is not valid base64; skipping it")
+        return None
+    if not raw or len(raw) > MAX_LOGO_BYTES:
+        logger.warning("Logo is empty or larger than %d bytes; skipping it", MAX_LOGO_BYTES)
+        return None
+    return raw
+
+
+def _build_logo(logo: str) -> Image | None:
+    """Scale the logo into the header box, preserving its aspect ratio."""
+    raw = _decode_logo(logo)
+    if raw is None:
+        return None
+    try:
+        image = Image(BytesIO(raw))
+        scale = min(LOGO_MAX_WIDTH / image.imageWidth, LOGO_MAX_HEIGHT / image.imageHeight)
+        image.drawWidth = image.imageWidth * scale
+        image.drawHeight = image.imageHeight * scale
+        image.hAlign = "LEFT"
+        return image
+    except Exception:
+        logger.warning("Could not render the supplied logo; skipping it", exc_info=True)
+        return None
+
+
 def _build_line_items_table(invoice: Invoice) -> Table:
+    money = _symbol(invoice.currency)
     header = ["Description", "Qty", "Unit Price", "Amount"]
     data = [header]
     for item in invoice.line_items:
@@ -31,13 +86,13 @@ def _build_line_items_table(invoice: Invoice) -> Table:
             [
                 _escape(item.description),
                 str(item.quantity),
-                f"${_escape(item.unit_price)}",
-                f"${_escape(item.amount)}",
+                f"{money}{_escape(item.unit_price)}",
+                f"{money}{_escape(item.amount)}",
             ]
         )
-    data.append(["", "", "Subtotal:", f"${invoice.subtotal}"])
-    data.append(["", "", f"Tax ({invoice.tax_rate}):", f"${invoice.tax_amount}"])
-    data.append(["", "", "Total:", f"${invoice.total}"])
+    data.append(["", "", "Subtotal:", f"{money}{invoice.subtotal}"])
+    data.append(["", "", f"Tax ({invoice.tax_rate}):", f"{money}{invoice.tax_amount}"])
+    data.append(["", "", "Total:", f"{money}{invoice.total}"])
 
     col_widths = [3.5 * inch, 0.6 * inch, 1.0 * inch, 1.0 * inch]
     line_table = Table(data, colWidths=col_widths)
@@ -66,7 +121,7 @@ def _build_line_items_table(invoice: Invoice) -> Table:
     return line_table
 
 
-def generate_invoice_pdf(invoice: Invoice) -> bytes:
+def generate_invoice_pdf(invoice: Invoice, logo: str = "") -> bytes:
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
@@ -97,7 +152,13 @@ def generate_invoice_pdf(invoice: Invoice) -> bytes:
 
     elements: list = []
 
-    elements.append(Paragraph("InvoiceCraft AI", title_style))
+    # The header carries the issuer's own branding — their logo and their name.
+    logo_flowable = _build_logo(logo) if logo else None
+    if logo_flowable is not None:
+        elements.append(logo_flowable)
+        elements.append(Spacer(1, 12))
+
+    elements.append(Paragraph(_escape(invoice.issuer.name) or "Invoice", title_style))
     elements.append(
         Paragraph(
             f"Invoice #{_escape(invoice.invoice_number)}",
@@ -127,33 +188,24 @@ def generate_invoice_pdf(invoice: Invoice) -> bytes:
     elements.append(meta_table)
     elements.append(Spacer(1, 20))
 
-    elements.append(Paragraph("Issuer", styles["Heading3"]))
-    elements.append(Paragraph(f"<b>{_escape(invoice.issuer.name)}</b>", section_style))
-    elements.append(Paragraph(_escape(invoice.issuer.address), section_style))
-    elements.append(Paragraph(_escape(invoice.issuer.email), section_style))
-    elements.append(Spacer(1, 10))
+    def add_party(heading: str, name: str, lines: list[str]) -> None:
+        elements.append(Paragraph(heading, styles["Heading3"]))
+        elements.append(Paragraph(f"<b>{_escape(name)}</b>", section_style))
+        for line in lines:
+            if line:
+                elements.append(Paragraph(_escape(line), section_style))
 
-    elements.append(Paragraph("Bill To", styles["Heading3"]))
-    elements.append(Paragraph(f"<b>{_escape(invoice.client.name)}</b>", section_style))
-    elements.append(Paragraph(_escape(invoice.client.email), section_style))
+    add_party("From", invoice.issuer.name, [invoice.issuer.address, invoice.issuer.email])
+    elements.append(Spacer(1, 10))
+    add_party("Bill To", invoice.client.name, [invoice.client.address, invoice.client.email])
     elements.append(Spacer(1, 20))
 
     elements.append(_build_line_items_table(invoice))
     elements.append(Spacer(1, 30))
 
-    elements.append(
-        Paragraph(
-            f"Payment Reference: {_escape(invoice.notes)}" if invoice.notes else "",
-            small_style,
-        )
-    )
-    elements.append(
-        Paragraph(
-            f"Currency: {invoice.currency} &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"Generated by InvoiceCraft",
-            small_style,
-        )
-    )
+    if invoice.notes:
+        elements.append(Paragraph(_escape(invoice.notes), small_style))
+    elements.append(Paragraph(f"Currency: {_escape(invoice.currency)}", small_style))
 
     doc.build(elements)
     return buf.getvalue()

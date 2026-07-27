@@ -73,7 +73,7 @@ def _normalize(payload: dict) -> Optional[dict]:
     if not line_items:
         return None
     client_name = str(payload.get("client_name") or "Client").strip() or "Client"
-    client_email = str(payload.get("client_email") or "client@example.com").strip()
+    client_email = str(payload.get("client_email") or "").strip()
     return {
         "client_name": client_name,
         "client_email": client_email,

@@ -24,7 +24,7 @@ def test_parse_description_simple():
 def test_parse_description_minimal():
     client, email, items = parse_description("Design logo")
     assert client == "Client"
-    assert email == "client@example.com"
+    assert email == ""
     assert len(items) == 1
 
 
@@ -107,5 +107,7 @@ def test_create_invoice_with_tx_hash():
         issuer=issuer,
         payment_tx_hash=tx_hash,
     )
-    assert tx_hash in invoice.notes
+    # The payment reference is deliberately kept off the invoice itself.
+    assert invoice.notes == ""
+    assert tx_hash not in invoice.notes
     assert invoice.status == "paid"

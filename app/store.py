@@ -29,6 +29,11 @@ def _redis_cfg():
     return None
 
 
+def backend() -> str:
+    """Which store is live: "upstash" survives restarts, "sqlite" does not."""
+    return "upstash" if _redis_cfg() else "sqlite"
+
+
 def _redis(*args):
     url, token = _redis_cfg()
     resp = httpx.post(

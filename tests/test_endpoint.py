@@ -58,7 +58,9 @@ def test_invoice_with_payment_no_challenge(monkeypatch):
     assert "invoice" in data
     assert "pdf" in data
     assert data["invoice"]["status"] == "paid"
-    assert data["invoice"]["issuer"]["address"] == "0xASPWalletAddress"
+    # The settlement wallet is not the issuer's postal address; it stays blank
+    # unless the caller supplies one.
+    assert data["invoice"]["issuer"]["address"] == ""
 
 
 GOOD_TX = "0x" + "01" * 32

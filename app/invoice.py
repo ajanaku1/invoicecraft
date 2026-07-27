@@ -10,13 +10,21 @@ from app.models import ClientInfo, Invoice, InvoiceLineItem, IssuerInfo
 _DEFAULT_PRICE = Decimal("500.00")
 
 
+def _label(text: str) -> str:
+    """Sentence-case a parsed line-item label for display on the invoice."""
+    text = text.strip()
+    return text[:1].upper() + text[1:] if text else text
+
+
 def _money(value) -> str:
     return str(Decimal(str(value)).quantize(Decimal("0.01")))
 
 
 def _extract_client(text: str) -> tuple[str, str]:
     client_name = "Client"
-    client_email = "client@example.com"
+    # No placeholder email — a fabricated address on a real invoice is worse
+    # than an omitted one, and the PDF simply drops the line when it's blank.
+    client_email = ""
 
     for prefix in ["invoice for ", "for ", "client: ", "client "]:
         idx = text.lower().find(prefix)
@@ -70,7 +78,7 @@ def _extract_line_items(description: str) -> list[InvoiceLineItem]:
             amount = qty * rate
             items.append(
                 InvoiceLineItem(
-                    description=label,
+                    description=_label(label),
                     quantity=int(qty) if qty == qty.to_integral_value() else 1,
                     unit_price=_money(rate),
                     amount=_money(amount),
@@ -89,7 +97,7 @@ def _extract_line_items(description: str) -> list[InvoiceLineItem]:
             label = seg[: flat.start()].strip(" $-–—") or context or "Professional services"
             items.append(
                 InvoiceLineItem(
-                    description=label,
+                    description=_label(label),
                     quantity=1,
                     unit_price=_money(amount),
                     amount=_money(amount),
@@ -149,25 +157,35 @@ def create_invoice(
     tax_rate: Decimal,
     issuer: IssuerInfo,
     payment_tx_hash: str = "",
+    client: ClientInfo | None = None,
+    currency: str = "USD",
 ) -> Invoice:
-    client_name, client_email, line_items = parse_description(description)
+    """Build an invoice from a description.
+
+    Client details supplied by the caller win over anything the parser can
+    extract from the description; fields left blank fall back to the parser.
+    """
+    parsed_name, parsed_email, line_items = parse_description(description)
     invoice_number = generate_invoice_number()
     subtotal, tax_amount, total = compute_totals(line_items, tax_rate)
 
     due_date = (date.today() + timedelta(days=30)).isoformat()
     status = "paid" if payment_tx_hash else "pending"
-    notes = f"Payment: {payment_tx_hash} on X Layer" if payment_tx_hash else ""
 
     return Invoice(
         issuer=issuer,
-        client=ClientInfo(name=client_name, email=client_email),
+        client=ClientInfo(
+            name=(client.name if client and client.name else parsed_name),
+            email=(client.email if client and client.email else parsed_email),
+            address=(client.address if client else ""),
+        ),
         line_items=line_items,
         invoice_number=invoice_number,
         subtotal=str(subtotal),
         tax_rate=str(tax_rate),
         tax_amount=str(tax_amount),
         total=str(total),
+        currency=currency,
         due_date=due_date,
         status=status,
-        notes=notes,
     )

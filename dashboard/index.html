@@ -86,6 +86,41 @@ body{
 }
 .input-group textarea::placeholder{color:#b8b0a4}
 [data-state="payment"] .input-group textarea,[data-state="invoice"] .input-group textarea{opacity:.6}
+.details{margin-top:18px;border-top:1px solid var(--border);padding-top:14px}
+.details>summary{
+  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;
+  color:var(--muted);cursor:pointer;list-style:none;user-select:none;
+}
+.details>summary::-webkit-details-marker{display:none}
+.details>summary::before{content:"+ ";font-weight:700}
+.details[open]>summary::before{content:"– "}
+.details-body{margin-top:14px}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field-grid .full{grid-column:1 / -1}
+.field label{
+  display:block;font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:1.2px;color:var(--muted);margin-bottom:5px;
+}
+.field input{
+  width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;font-family:var(--body);font-size:13px;color:var(--text);
+}
+.field input:focus{
+  outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(200,169,110,.15);
+}
+.field input::placeholder{color:#b8b0a4}
+.field-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5}
+.logo-row{display:flex;align-items:center;gap:12px;margin-top:4px}
+.logo-preview{
+  width:56px;height:40px;object-fit:contain;border:1px solid var(--border);
+  border-radius:6px;background:var(--surface);padding:3px;
+}
+.fieldset-label{
+  font-size:11px;font-weight:600;color:var(--text);margin:14px 0 8px;
+  letter-spacing:.3px;
+}
+.fieldset-label:first-child{margin-top:0}
+.issuer-logo{max-width:120px;max-height:44px;object-fit:contain;display:block;margin-bottom:8px}
 .generate-row{margin-top:12px}
 .btn-primary{
   width:100%;padding:12px 24px;background:var(--primary);color:#fff;
@@ -347,6 +382,66 @@ body{
         <label for="desc">Job Description</label>
         <textarea id="desc" placeholder="e.g. Brand strategy consultation for early-stage SaaS startup — includes competitor audit, positioning framework, and visual identity direction." rows="4" aria-describedby="descHint">Website redesign for FinFlow — responsive rebuild, CMS integration, and performance optimization.</textarea>
 
+        <details class="details" id="invoiceDetails">
+          <summary>Invoice details &amp; branding</summary>
+          <div class="details-body">
+            <p class="fieldset-label">Your business</p>
+            <div class="field-grid">
+              <div class="field full">
+                <label for="issuerName">Business name</label>
+                <input id="issuerName" type="text" placeholder="Bambam Studio" autocomplete="organization">
+              </div>
+              <div class="field">
+                <label for="issuerEmail">Email</label>
+                <input id="issuerEmail" type="email" placeholder="hi@yourstudio.com" autocomplete="email">
+              </div>
+              <div class="field">
+                <label for="issuerAddress">Address</label>
+                <input id="issuerAddress" type="text" placeholder="12 Marina Rd, Lagos">
+              </div>
+            </div>
+
+            <p class="fieldset-label">Bill to</p>
+            <div class="field-grid">
+              <div class="field full">
+                <label for="billName">Client name</label>
+                <input id="billName" type="text" placeholder="FinFlow Ltd">
+              </div>
+              <div class="field">
+                <label for="billEmail">Client email</label>
+                <input id="billEmail" type="email" placeholder="ap@finflow.com">
+              </div>
+              <div class="field">
+                <label for="billAddress">Client address</label>
+                <input id="billAddress" type="text" placeholder="9 King St, London">
+              </div>
+            </div>
+
+            <p class="fieldset-label">Options</p>
+            <div class="field-grid">
+              <div class="field">
+                <label for="currency">Currency</label>
+                <input id="currency" type="text" placeholder="USD" maxlength="3" autocapitalize="characters">
+              </div>
+              <div class="field">
+                <label for="taxRate">Tax rate</label>
+                <input id="taxRate" type="text" placeholder="0.08" inputmode="decimal">
+              </div>
+              <div class="field full">
+                <label for="logoInput">Brand logo</label>
+                <div class="logo-row">
+                  <input id="logoInput" type="file" accept="image/png,image/jpeg">
+                  <img id="logoPreview" class="logo-preview" alt="Logo preview" hidden>
+                </div>
+                <p class="field-note">PNG or JPEG, up to 2 MB. Appears at the top of the PDF.</p>
+              </div>
+            </div>
+            <p class="field-note">
+              Anything you leave blank is inferred from the job description where possible.
+            </p>
+          </div>
+        </details>
+
         <div class="generate-row">
           <button class="btn-primary" id="generateBtn">Generate Invoice</button>
         </div>
@@ -416,8 +511,9 @@ body{
           <!-- Letterhead -->
           <div class="invoice-header">
             <div class="invoice-issuer">
-              <h3>InvoiceCraft AI</h3>
-              <p>548 Market St, PMB 72291<br>San Francisco, CA 94104<br>support@invoicecraft.ai</p>
+              <img id="previewLogo" class="issuer-logo" alt="" hidden>
+              <h3 id="previewIssuerName">Your Business</h3>
+              <p id="previewIssuerLines">Add your details under “Invoice details &amp; branding”.</p>
             </div>
             <div class="invoice-meta" aria-label="Invoice number and date">
               <div class="inv-label">Invoice</div>
@@ -476,8 +572,7 @@ body{
           <!-- Footer -->
           <div class="invoice-footer">
             <p>
-              <strong>Payment:</strong> <span id="footerAddress">0x...</span> on X Layer<br>
-              <span>Generated by InvoiceCraft</span>
+              <span id="footerAddress">—</span>
             </p>
             <div class="payment-badge" aria-label="x402 payment enabled">
               <span class="bolt" aria-hidden="true">⚡</span> x402

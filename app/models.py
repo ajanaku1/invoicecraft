@@ -4,6 +4,14 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+class PartyInput(BaseModel):
+    """Issuer or client details supplied by the caller."""
+
+    name: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+
+
 class InvoiceRequest(BaseModel):
     # Optional so an unpaid probe (empty body) still reaches the x402 402 path
     # instead of failing request validation.
@@ -12,6 +20,14 @@ class InvoiceRequest(BaseModel):
     # Legacy field, kept for backward compatibility; x402 uses the on-chain tx
     # as the payment proof, so no server-issued challenge is required.
     challenge_id: Optional[str] = None
+    # Invoice details. Anything omitted falls back to a server default or to
+    # whatever the parser can extract from the description.
+    issuer: Optional[PartyInput] = None
+    client: Optional[PartyInput] = None
+    currency: Optional[str] = None
+    tax_rate: Optional[str] = None
+    # Brand logo as a data: URL or bare base64 (PNG/JPEG), rendered on the PDF.
+    logo: Optional[str] = None
 
 
 class InvoiceLineItem(BaseModel):
@@ -30,6 +46,7 @@ class IssuerInfo(BaseModel):
 class ClientInfo(BaseModel):
     name: str
     email: str
+    address: str = ""
 
 
 class PaymentInfo(BaseModel):

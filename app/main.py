@@ -15,7 +15,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app import store
 from app.invoice import create_invoice
-from app.models import InvoiceRequest, IssuerInfo
+from app.models import ClientInfo, InvoiceRequest, IssuerInfo
 from app.okx_payments import install_payment_middleware
 from app.pdf_engine import generate_invoice_pdf
 from app.tax import get_tax_rate
@@ -60,6 +60,46 @@ def _x402_requirements(resource_url: str, asp_wallet: str) -> dict:
     }
 
 
+def _field(req: Optional[InvoiceRequest], party: str, name: str) -> str:
+    """Read a party field from the request, or "" when it wasn't supplied."""
+    source = getattr(req, party, None) if req else None
+    return (getattr(source, name, None) or "").strip() if source else ""
+
+
+def _issuer_from(req: Optional[InvoiceRequest]) -> IssuerInfo:
+    """The billing business: caller-supplied, falling back to server defaults."""
+    return IssuerInfo(
+        name=_field(req, "issuer", "name")
+        or os.getenv("INVOICE_ISSUER_NAME", "Your Business"),
+        address=_field(req, "issuer", "address"),
+        email=_field(req, "issuer", "email") or os.getenv("INVOICE_ISSUER_EMAIL", ""),
+    )
+
+
+def _client_from(req: Optional[InvoiceRequest]) -> ClientInfo:
+    return ClientInfo(
+        name=_field(req, "client", "name"),
+        email=_field(req, "client", "email"),
+        address=_field(req, "client", "address"),
+    )
+
+
+def _currency_from(req: Optional[InvoiceRequest]) -> str:
+    currency = (req.currency or "").strip().upper() if req else ""
+    return currency or os.getenv("INVOICE_CURRENCY", "USD")
+
+
+def _requested_tax_rate(req: Optional[InvoiceRequest]) -> Decimal:
+    """Caller-supplied tax rate, else the server default. Raises if malformed."""
+    raw = (req.tax_rate or "").strip() if req else ""
+    if not raw:
+        return get_tax_rate()
+    rate = Decimal(raw)
+    if not (0 <= rate <= 1):
+        raise ValueError("tax_rate out of range")
+    return rate
+
+
 def _payment_required_response(resource_url: str, asp_wallet: str) -> JSONResponse:
     """A 402 that advertises x402 requirements in both the header and body."""
     body = _x402_requirements(resource_url, asp_wallet)
@@ -99,6 +139,8 @@ async def health():
         "service": "InvoiceCraft",
         "payment_mode": os.getenv("PAYMENT_VERIFY_MODE", "mock").lower(),
         "payment_sdk": "okxweb3-app-x402" if OKX_PAYMENTS_ACTIVE else "fallback",
+        # "upstash" survives restarts; "sqlite" is ephemeral on a free dyno.
+        "persistence": store.backend(),
         "ai_enabled": bool(os.getenv("LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY")),
     }
 
@@ -167,20 +209,26 @@ async def invoice_endpoint(
             return _payment_required_response(resource_url, asp_wallet)
         payment_reference = tx_hash
 
-    tax_rate = get_tax_rate()
-    issuer = IssuerInfo(
-        name=os.getenv("INVOICE_ISSUER_NAME", "InvoiceCraft AI"),
-        address=asp_wallet,
-        email=os.getenv("INVOICE_ISSUER_EMAIL", "invoice@craft.dev"),
-    )
+    try:
+        tax_rate = _requested_tax_rate(req)
+    except (ArithmeticError, ValueError):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "invalid_tax_rate",
+                "message": "tax_rate must be a decimal between 0 and 1, e.g. 0.08",
+            },
+        )
 
     try:
         invoice = await run_in_threadpool(
             create_invoice,
             description=desc,
             tax_rate=tax_rate,
-            issuer=issuer,
+            issuer=_issuer_from(req),
             payment_tx_hash=payment_reference,
+            client=_client_from(req),
+            currency=_currency_from(req),
         )
     except Exception:
         logger.exception("Invoice creation failed")
@@ -193,7 +241,7 @@ async def invoice_endpoint(
         )
 
     try:
-        pdf_bytes = generate_invoice_pdf(invoice)
+        pdf_bytes = generate_invoice_pdf(invoice, logo=(req.logo or "") if req else "")
         pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
     except Exception:
         logger.exception("PDF generation failed")

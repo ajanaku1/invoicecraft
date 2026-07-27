@@ -19,6 +19,11 @@
   var textarea = document.getElementById('desc');
   var challengeIdEl = document.getElementById('challengeId');
   var toast = document.getElementById('toast');
+  var logoInput = document.getElementById('logoInput');
+  var logoPreview = document.getElementById('logoPreview');
+  var previewLogo = document.getElementById('previewLogo');
+  var previewIssuerName = document.getElementById('previewIssuerName');
+  var previewIssuerLines = document.getElementById('previewIssuerLines');
 
   var invNumber = document.getElementById('invNumber');
   var invDate = document.getElementById('invDate');
@@ -38,17 +43,29 @@
 
   var toastTimer = null;
   // Live payment/invoice context returned by the backend.
-  var session = { payment: null, invoice: null, pdf: null };
+  var session = { payment: null, invoice: null, pdf: null, requirements: null, logo: null };
   var wallet = { account: null };
 
   function getProvider() {
     return window.okxwallet || window.ethereum || null;
   }
 
+  var CURRENCY_SYMBOLS = {
+    USD: '$', EUR: '\u20ac', GBP: '\u00a3', JPY: '\u00a5', CNY: '\u00a5',
+    NGN: '\u20a6', INR: '\u20b9', CAD: 'C$', AUD: 'A$', BRL: 'R$', SGD: 'S$'
+  };
+
+  // Symbol for the invoice on screen; falls back to the code (e.g. "SEK 12.00").
+  function currencySymbol() {
+    var code = (session.invoice && session.invoice.currency) || 'USD';
+    return CURRENCY_SYMBOLS[code] || code + ' ';
+  }
+
   function fmtMoney(str) {
+    var symbol = currencySymbol();
     var n = parseFloat(str);
-    if (isNaN(n)) return '$0.00';
-    return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    if (isNaN(n)) return symbol + '0.00';
+    return symbol + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
 
   function shortHex(str) {
@@ -102,7 +119,21 @@
     }
   }
 
+  // The letterhead is the issuer's, not the product's.
+  function renderIssuer(issuer) {
+    previewIssuerName.textContent = issuer.name;
+    previewIssuerLines.textContent =
+      [issuer.address, issuer.email].filter(Boolean).join(' · ');
+    if (session.logo) {
+      previewLogo.src = session.logo;
+      previewLogo.hidden = false;
+    } else {
+      previewLogo.hidden = true;
+    }
+  }
+
   function renderInvoice(invoice) {
+    renderIssuer(invoice.issuer);
     invNumber.textContent = invoice.invoice_number;
 
     var now = new Date();
@@ -148,7 +179,7 @@
     subtotalEl.textContent = fmtMoney(invoice.subtotal);
     taxEl.textContent = fmtMoney(invoice.tax_amount);
     totalDue.textContent = fmtMoney(invoice.total);
-    footerAddress.textContent = shortHex(invoice.issuer.address);
+    footerAddress.textContent = invoice.issuer.address || invoice.issuer.email || '';
   }
 
   function resetInvoice() {
@@ -163,8 +194,11 @@
     subtotalEl.textContent = '$0.00';
     taxEl.textContent = '$0.00';
     totalDue.textContent = '$0.00';
-    footerAddress.textContent = '0x...';
-    session = { payment: null, invoice: null, pdf: null };
+    footerAddress.textContent = '\u2014';
+    session.payment = null;
+    session.invoice = null;
+    session.pdf = null;
+    session.requirements = null;
   }
 
   // ── Wallet (EIP-1193) ──────────────────────────────────────────────
@@ -253,6 +287,37 @@
     return X402Client.decodeRequirements(header) || data;
   }
 
+  // Details the user filled in, omitting blanks so the server keeps its own
+  // fallbacks (and the parser keeps its guesses) for anything left empty.
+  function invoiceBody(description) {
+    var body = { description: description };
+    var parties = {
+      issuer: { name: 'issuerName', email: 'issuerEmail', address: 'issuerAddress' },
+      client: { name: 'billName', email: 'billEmail', address: 'billAddress' }
+    };
+    Object.keys(parties).forEach(function (party) {
+      var fields = parties[party];
+      var filled = {};
+      Object.keys(fields).forEach(function (key) {
+        var value = fieldValue(fields[key]);
+        if (value) filled[key] = value;
+      });
+      if (Object.keys(filled).length) body[party] = filled;
+    });
+
+    var currency = fieldValue('currency');
+    if (currency) body.currency = currency.toUpperCase();
+    var taxRate = fieldValue('taxRate');
+    if (taxRate) body.tax_rate = taxRate;
+    if (session.logo) body.logo = session.logo;
+    return body;
+  }
+
+  function fieldValue(id) {
+    var el = document.getElementById(id);
+    return el ? el.value.trim() : '';
+  }
+
   function requestChallenge(description) {
     return fetch(API_BASE + '/api/v1/invoice', {
       method: 'POST',
@@ -274,7 +339,7 @@
     return fetch(API_BASE + '/api/v1/invoice', {
       method: 'POST',
       headers: headers,
-      body: JSON.stringify({ description: description })
+      body: JSON.stringify(invoiceBody(description))
     }).then(function (res) {
       return res.json().then(function (data) {
         return { status: res.status, data: data };
@@ -299,10 +364,9 @@
     return fetch(API_BASE + '/api/v1/invoice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        description: description,
-        payment_tx_hash: txHash
-      })
+      body: JSON.stringify(
+        Object.assign(invoiceBody(description), { payment_tx_hash: txHash })
+      )
     }).then(function (res) {
       return res.json().then(function (data) {
         return { status: res.status, data: data };
@@ -387,6 +451,7 @@
       payBtn.classList.add('success');
       payBtn.innerHTML = '&#10003; Payment Settled';
       showToast('Invoice generated — payment settled on X Layer');
+      loadStats();
       setTimeout(function () {
         setState(STATE.INVOICE);
         setTimeout(resetPayButton, 400);
@@ -501,6 +566,30 @@
   }
   loadPaymentMode();
 
+  var MAX_LOGO_BYTES = 2 * 1024 * 1024;
+
+  function handleLogoChange() {
+    var file = logoInput.files && logoInput.files[0];
+    if (!file) {
+      session.logo = null;
+      logoPreview.hidden = true;
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      showToast('That logo is over 2 MB — pick a smaller file.');
+      logoInput.value = '';
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      session.logo = reader.result;
+      logoPreview.src = reader.result;
+      logoPreview.hidden = false;
+    };
+    reader.onerror = function () { showToast('Could not read that image file.'); };
+    reader.readAsDataURL(file);
+  }
+
   function loadStats() {
     fetch(API_BASE + '/stats')
       .then(function (r) { return r.json(); })
@@ -526,6 +615,7 @@
     });
   }
   downloadBtn.addEventListener('click', handleDownload);
+  logoInput.addEventListener('change', handleLogoChange);
 
   setState(STATE.INPUT);
 })();
