@@ -21,10 +21,6 @@ services:
         sync: false
       - key: OKX_PASSPHRASE
         sync: false
-      - key: INVOICE_ISSUER_NAME
-        value: InvoiceCraft AI
-      - key: INVOICE_ISSUER_EMAIL
-        value: invoice@craft.dev
       - key: TAX_RATE
         value: "0.08"
       # Payment verification: "mock" (demo, accepts well-formed tx hashes) or

@@ -67,12 +67,16 @@ def _field(req: Optional[InvoiceRequest], party: str, name: str) -> str:
 
 
 def _issuer_from(req: Optional[InvoiceRequest]) -> IssuerInfo:
-    """The billing business: caller-supplied, falling back to server defaults."""
+    """The freelancer or brand sending the invoice — always the caller's own.
+
+    Deliberately has no server-side default beyond a neutral placeholder: this
+    service issues invoices on behalf of its users, so stamping the operator's
+    own name or email on their invoice would be wrong.
+    """
     return IssuerInfo(
-        name=_field(req, "issuer", "name")
-        or os.getenv("INVOICE_ISSUER_NAME", "Your Business"),
+        name=_field(req, "issuer", "name") or "Your Business",
         address=_field(req, "issuer", "address"),
-        email=_field(req, "issuer", "email") or os.getenv("INVOICE_ISSUER_EMAIL", ""),
+        email=_field(req, "issuer", "email"),
     )
 
 

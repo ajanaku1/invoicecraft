@@ -20,6 +20,13 @@ def _money(value) -> str:
     return str(Decimal(str(value)).quantize(Decimal("0.01")))
 
 
+# Where a client name ends: punctuation, a dash, or the work itself starting.
+_CLIENT_STOP = re.compile(
+    r"[,.;:]|\s[—–-]\s|\s(?=\d)|\s+(?:invoice|inv\.?|re:)\b",
+    re.IGNORECASE,
+)
+
+
 def _extract_client(text: str) -> tuple[str, str]:
     client_name = "Client"
     # No placeholder email — a fabricated address on a real invoice is worse
@@ -31,7 +38,7 @@ def _extract_client(text: str) -> tuple[str, str]:
         if idx == -1:
             continue
         candidate = text[idx + len(prefix):].strip()
-        candidate = re.split(r"[,.;]", candidate)[0].strip()
+        candidate = _CLIENT_STOP.split(candidate)[0].strip(" -–—")
         if candidate:
             client_name = candidate
             break
@@ -45,6 +52,55 @@ def _extract_client(text: str) -> tuple[str, str]:
     return client_name, client_email
 
 
+# Hard item boundaries; "and" is handled separately because it joins phrases
+# ("hosting and DNS setup") as often as it joins items.
+_SEGMENT_SPLIT = re.compile(r",|;|\bplus\b", re.IGNORECASE)
+_AND_SPLIT = re.compile(r"\band\b", re.IGNORECASE)
+
+# A flat fee at the end of a segment: "CMS integration 1200".
+_TRAILING_AMOUNT = re.compile(r"\$?(\d+(?:\.\d+)?)\s*$")
+
+# "40 hours at 75/hr", and the same with words in between:
+# "40 hours of design and front-end build at 75/hr".
+_HOURS_AND_RATE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b"       # quantity
+    r"(?:\s+(?:of\s+)?[^,;]*?)??"                # optional description of the work
+    r"\s*(?:@|at)?\s*\$?(\d+(?:\.\d+)?)"         # rate
+    r"\s*(?:/\s*(?:hr|hour)|\s*per\s+hour)?",    # optional /hr suffix
+    re.IGNORECASE,
+)
+
+# A trailing "for <Client>" clause belongs in Bill To, not in the item label.
+# Only a capitalised name is stripped, so "Training for staff" survives intact.
+_TRAILING_CLIENT = re.compile(r"\s+for\s+[A-Z][^,;]*$")
+
+
+def _has_price(text: str) -> bool:
+    return bool(_HOURS_AND_RATE.search(text) or _TRAILING_AMOUNT.search(text.strip()))
+
+
+def _split_segments(description: str) -> list[str]:
+    """Split into candidate line items.
+
+    "and" only separates items when both sides carry their own price; otherwise
+    it is part of one phrase ("hosting and DNS setup 200").
+    """
+    segments = []
+    for segment in _SEGMENT_SPLIT.split(description):
+        parts = _AND_SPLIT.split(segment)
+        if len(parts) > 1 and all(_has_price(part) for part in parts):
+            segments.extend(parts)
+        else:
+            segments.append(segment)
+    return segments
+
+
+def _item_label(raw: str, context: str) -> str:
+    """Label for a line item, falling back to the preceding unpriced phrase."""
+    label = raw.strip(" -–—") or context or "Professional services"
+    return _TRAILING_CLIENT.sub("", label).strip(" -–—")
+
+
 def _extract_line_items(description: str) -> list[InvoiceLineItem]:
     """Heuristic fallback: pull priced work items out of the description.
 
@@ -53,20 +109,15 @@ def _extract_line_items(description: str) -> list[InvoiceLineItem]:
     otherwise returns a single default-priced item. The LLM parser
     (`ai_parser.parse_with_ai`) is the primary path when an API key is set.
     """
-    segments = re.split(r",|\bplus\b|\band\b|;", description, flags=re.IGNORECASE)
     items: list[InvoiceLineItem] = []
     context = ""
 
-    for raw in segments:
+    for raw in _split_segments(description):
         seg = raw.strip()
         if not seg:
             continue
 
-        hours = re.search(
-            r"(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\s*(?:@|at)?\s*\$?(\d+(?:\.\d+)?)",
-            seg,
-            re.IGNORECASE,
-        )
+        hours = _HOURS_AND_RATE.search(seg)
         if hours:
             try:
                 qty = Decimal(hours.group(1))
@@ -74,7 +125,7 @@ def _extract_line_items(description: str) -> list[InvoiceLineItem]:
             except InvalidOperation:
                 context = seg
                 continue
-            label = seg[: hours.start()].strip(" -–—") or context or "Professional services"
+            label = _item_label(seg[: hours.start()], context)
             amount = qty * rate
             items.append(
                 InvoiceLineItem(
@@ -94,7 +145,7 @@ def _extract_line_items(description: str) -> list[InvoiceLineItem]:
             except InvalidOperation:
                 context = seg
                 continue
-            label = seg[: flat.start()].strip(" $-–—") or context or "Professional services"
+            label = _item_label(seg[: flat.start()].strip(" $"), context)
             items.append(
                 InvoiceLineItem(
                     description=_label(label),

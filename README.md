@@ -36,8 +36,6 @@ git clone <repo> && cd InvoiceCraft
 pip install -r requirements.txt
 
 export ASP_WALLET=0xYourWallet
-export INVOICE_ISSUER_NAME="Your Name"
-export INVOICE_ISSUER_EMAIL="you@example.com"
 
 python3 -m uvicorn app.main:app --reload
 ```
@@ -140,7 +138,7 @@ The fields below describe the fallback flow used when OKX credentials are not co
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ASP_WALLET` | (required) | Receiver address for payments (`payTo`), shown as the issuer on the invoice |
+| `ASP_WALLET` | (required) | Receiver address for payments (`payTo`) |
 | `OKX_API_KEY` | (unset) | OKX Onchain OS dev-portal API key. With the two below, enables the official Payment SDK |
 | `OKX_SECRET_KEY` | (unset) | Secret key used for the facilitator's HMAC-SHA256 signing |
 | `OKX_PASSPHRASE` | (unset) | Dev-portal passphrase |

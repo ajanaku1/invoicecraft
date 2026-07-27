@@ -26,6 +26,7 @@
   var attachLogoBtn = document.getElementById('attachLogoBtn');
   var removeLogoBtn = document.getElementById('removeLogoBtn');
   var previewLogo = document.getElementById('previewLogo');
+  var invoiceDetails = document.getElementById('invoiceDetails');
   var previewIssuerName = document.getElementById('previewIssuerName');
   var previewIssuerLines = document.getElementById('previewIssuerLines');
 
@@ -49,6 +50,7 @@
   // Live payment/invoice context returned by the backend.
   var session = { payment: null, invoice: null, pdf: null, requirements: null, logo: null };
   var wallet = { account: null };
+  var warnedAboutIssuer = false;
 
   function getProvider() {
     return window.okxwallet || window.ethereum || null;
@@ -390,6 +392,16 @@
     if (!text) {
       showToast('Please describe the work to generate an invoice.');
       textarea.focus();
+      return;
+    }
+
+    // Payment is irreversible, so warn once before someone buys an invoice
+    // that says "Your Business" instead of their own name.
+    if (!fieldValue('issuerName') && !warnedAboutIssuer) {
+      warnedAboutIssuer = true;
+      invoiceDetails.open = true;
+      document.getElementById('issuerName').focus();
+      showToast('Add your business name so the invoice comes from you.');
       return;
     }
 

@@ -1,6 +1,7 @@
 """Caller-supplied invoice details: parties, currency, tax rate, and logo."""
 
 import base64
+import itertools
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,8 +11,6 @@ from app.models import ClientInfo, IssuerInfo
 from app.pdf_engine import MAX_LOGO_BYTES, generate_invoice_pdf
 
 client = TestClient(app)
-
-PAID_TX = "0x" + "01" * 32
 
 # Smallest valid PNG: a single transparent pixel.
 PNG_1PX = base64.b64decode(
@@ -28,8 +27,16 @@ def wallet(monkeypatch):
     monkeypatch.delenv("INVOICE_CURRENCY", raising=False)
 
 
+_tx_counter = itertools.count(1)
+
+
 def post_invoice(**fields):
-    body = {"description": "Website redesign, 10 hours at 50/hr", "payment_tx_hash": PAID_TX}
+    # A fresh tx per call: one payment buys exactly one invoice, so reusing a
+    # hash inside a test would trip the replay guard rather than the assertion.
+    body = {
+        "description": "Website redesign, 10 hours at 50/hr",
+        "payment_tx_hash": "0x" + f"{next(_tx_counter):064x}",
+    }
     body.update(fields)
     return client.post("/api/v1/invoice", json=body)
 
@@ -56,6 +63,20 @@ def test_issuer_falls_back_without_naming_the_product():
     assert "InvoiceCraft" not in invoice["issuer"]["name"]
 
 
+def test_server_env_cannot_brand_a_users_invoice(monkeypatch):
+    """The operator's own identity must never appear as the sender."""
+    monkeypatch.setenv("INVOICE_ISSUER_NAME", "InvoiceCraft AI")
+    monkeypatch.setenv("INVOICE_ISSUER_EMAIL", "invoice@craft.dev")
+
+    issuer = post_invoice().json()["invoice"]["issuer"]
+
+    assert issuer["name"] == "Your Business"
+    assert issuer["email"] == ""
+
+    issuer = post_invoice(issuer={"name": "Bambam Studio"}).json()["invoice"]["issuer"]
+    assert issuer["name"] == "Bambam Studio"
+
+
 def test_currency_and_tax_rate_are_honoured():
     invoice = post_invoice(currency="eur", tax_rate="0.20").json()["invoice"]
     assert invoice["currency"] == "EUR"
@@ -75,7 +96,7 @@ def test_malformed_tax_rate_is_rejected(bad):
 def test_no_payment_reference_on_the_invoice():
     invoice = post_invoice().json()["invoice"]
     assert invoice["notes"] == ""
-    assert PAID_TX not in str(invoice)
+    assert "0x0000" not in str(invoice)
 
 
 @pytest.fixture
