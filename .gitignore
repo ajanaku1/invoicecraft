@@ -9,3 +9,7 @@ venv/
 .DS_Store
 *.log
 *.db
+
+# Local docs / scaffolding — keep only README.md in the repo
+*.md
+!README.md
