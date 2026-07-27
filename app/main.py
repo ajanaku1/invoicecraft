@@ -16,12 +16,17 @@ from starlette.concurrency import run_in_threadpool
 from app import store
 from app.invoice import create_invoice
 from app.models import InvoiceRequest, IssuerInfo
+from app.okx_payments import install_payment_middleware
 from app.pdf_engine import generate_invoice_pdf
 from app.tax import get_tax_rate
 from app.x402 import verify_payment
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="InvoiceCraft")
+
+# Reference recorded on invoices settled through the OKX Payment SDK, where the
+# on-chain settlement is performed by the facilitator rather than by the caller.
+SDK_PAYMENT_REFERENCE = "OKX x402 (Onchain OS Payment SDK)"
 
 PRICE_USDT = Decimal(os.getenv("INVOICE_PRICE_USDT", "0.50"))
 
@@ -63,12 +68,27 @@ def _payment_required_response(resource_url: str, asp_wallet: str) -> JSONRespon
     ).decode("ascii")
     return JSONResponse(status_code=402, headers={"payment-required": header}, content=body)
 
+
+# Payment gate. The official OKX SDK owns the 402/PAYMENT-SIG handshake when
+# credentials are configured; `_payment_required_response` below is only the
+# fallback for local dev and tests. Installed before CORS so that CORS stays the
+# outermost middleware and 402 responses still carry its headers.
+OKX_PAYMENTS_ACTIVE = install_payment_middleware(
+    app,
+    fallback=lambda request: _payment_required_response(
+        str(request.url), os.getenv("ASP_WALLET", "")
+    ),
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    # x402 clients read the payment requirements and settlement proof from
+    # response headers, which cross-origin callers cannot see unless exposed.
+    expose_headers=["*"],
 )
 
 
@@ -78,6 +98,7 @@ async def health():
         "status": "ok",
         "service": "InvoiceCraft",
         "payment_mode": os.getenv("PAYMENT_VERIFY_MODE", "mock").lower(),
+        "payment_sdk": "okxweb3-app-x402" if OKX_PAYMENTS_ACTIVE else "fallback",
         "ai_enabled": bool(os.getenv("LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY")),
     }
 
@@ -111,10 +132,13 @@ async def invoice_endpoint(
         )
 
     tx_hash = req.payment_tx_hash if req else None
+    # Set by the OKX SDK middleware once it has verified PAYMENT-SIG; a request
+    # that reaches the handler with it has already paid.
+    paid_via_sdk = getattr(request.state, "payment_payload", None) is not None
 
     # x402: any unpaid request (including an empty probe body) must receive the
     # payment challenge first, before any business-input validation.
-    if not tx_hash:
+    if not paid_via_sdk and not tx_hash:
         return _payment_required_response(resource_url, asp_wallet)
 
     desc = (req.description or "").strip() if req else ""
@@ -129,15 +153,19 @@ async def invoice_endpoint(
             content={"error": "invalid_description", "message": msg},
         )
 
-    verify_result = verify_payment(
-        tx_hash=tx_hash,
-        challenge_id=req.challenge_id if req else None,
-        expected_amount=Decimal("0.50"),
-        expected_receiver=asp_wallet,
-    )
-    if not verify_result.get("verified"):
-        # Re-advertise x402 requirements so the caller can retry correctly.
-        return _payment_required_response(resource_url, asp_wallet)
+    if paid_via_sdk:
+        payment_reference = SDK_PAYMENT_REFERENCE
+    else:
+        verify_result = verify_payment(
+            tx_hash=tx_hash,
+            challenge_id=req.challenge_id if req else None,
+            expected_amount=PRICE_USDT,
+            expected_receiver=asp_wallet,
+        )
+        if not verify_result.get("verified"):
+            # Re-advertise x402 requirements so the caller can retry correctly.
+            return _payment_required_response(resource_url, asp_wallet)
+        payment_reference = tx_hash
 
     tax_rate = get_tax_rate()
     issuer = IssuerInfo(
@@ -152,7 +180,7 @@ async def invoice_endpoint(
             description=desc,
             tax_rate=tax_rate,
             issuer=issuer,
-            payment_tx_hash=tx_hash,
+            payment_tx_hash=payment_reference,
         )
     except Exception:
         logger.exception("Invoice creation failed")
