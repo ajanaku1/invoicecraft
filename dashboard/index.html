@@ -111,6 +111,7 @@ body{
   cursor:pointer;padding:0 2px;
 }
 .attach-remove:hover{color:var(--error)}
+.sender-grid{margin-bottom:18px}
 .details{margin-top:18px;border-top:1px solid var(--border);padding-top:14px}
 .details>summary{
   font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;
@@ -404,11 +405,24 @@ body{
       <p class="subtitle">AI-powered invoices with x402 micropayments. Describe the work and get a ready-to-ship invoice in seconds.</p>
 
       <div class="input-group">
+        <!-- Who the invoice is from. Kept out of the collapsed panel because a
+             blank business name is the single most damaging thing to miss. -->
+        <div class="field-grid sender-grid">
+          <div class="field full">
+            <label for="issuerName">Your business name</label>
+            <input id="issuerName" type="text" placeholder="e.g. Bambam Studio" autocomplete="organization">
+          </div>
+          <div class="field full">
+            <label for="issuerEmail">Your email</label>
+            <input id="issuerEmail" type="email" placeholder="e.g. hi@bambamstudio.com" autocomplete="email">
+          </div>
+        </div>
+
         <label for="desc">Job Description</label>
-        <textarea id="desc" placeholder="e.g. Brand identity refresh for Northwind Coffee, 24 hours at 95/hr, packaging artwork 1800, print-ready handoff 350" rows="5" aria-describedby="descHint">Website redesign for FinFlow Ltd, 40 hours at 75/hr, CMS integration 1200, hosting setup 200, staff training 6 hours at 90/hr</textarea>
+        <textarea id="desc" placeholder="e.g. Brand identity refresh for Northwind Coffee, hello@northwind.co, 24 hours of logo and packaging design at 95/hr, print-ready artwork handoff 350" rows="5" aria-describedby="descHint">Website redesign for FinFlow Ltd, ap@finflow.com, 40 hours of design and front-end build at 75/hr, CMS integration and content migration 1200, hosting and DNS setup 200, plus 6 hours of team training at 90/hr</textarea>
         <p class="field-note">
-          Name the client, then list each item with its hours and rate (“40 hours at 75/hr”)
-          or a flat fee (“CMS integration 1200”).
+          Name the client and their email, then list each item with its hours and rate
+          (“40 hours of design at 75/hr”) or a flat fee (“CMS integration 1200”).
         </p>
 
         <!-- Attach your own logo, right where the prompt is. -->
@@ -430,14 +444,6 @@ body{
             <p class="fieldset-label">Your business</p>
             <div class="field-grid">
               <div class="field full">
-                <label for="issuerName">Business name</label>
-                <input id="issuerName" type="text" placeholder="Bambam Studio" autocomplete="organization">
-              </div>
-              <div class="field">
-                <label for="issuerEmail">Email</label>
-                <input id="issuerEmail" type="email" placeholder="hi@yourstudio.com" autocomplete="email">
-              </div>
-              <div class="field">
                 <label for="issuerAddress">Address</label>
                 <input id="issuerAddress" type="text" placeholder="12 Marina Rd, Lagos">
               </div>

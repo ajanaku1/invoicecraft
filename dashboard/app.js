@@ -26,7 +26,7 @@
   var attachLogoBtn = document.getElementById('attachLogoBtn');
   var removeLogoBtn = document.getElementById('removeLogoBtn');
   var previewLogo = document.getElementById('previewLogo');
-  var invoiceDetails = document.getElementById('invoiceDetails');
+  var issuerNameInput = document.getElementById('issuerName');
   var previewIssuerName = document.getElementById('previewIssuerName');
   var previewIssuerLines = document.getElementById('previewIssuerLines');
 
@@ -123,6 +123,15 @@
         setTimeout(function () { downloadBtn.focus(); }, 100);
         break;
     }
+  }
+
+  // Echo the sender into the letterhead while they type.
+  function previewSender() {
+    renderIssuer({
+      name: fieldValue('issuerName') || 'Your Business',
+      email: fieldValue('issuerEmail'),
+      address: fieldValue('issuerAddress')
+    });
   }
 
   // The letterhead is the issuer's, not the product's.
@@ -399,8 +408,7 @@
     // that says "Your Business" instead of their own name.
     if (!fieldValue('issuerName') && !warnedAboutIssuer) {
       warnedAboutIssuer = true;
-      invoiceDetails.open = true;
-      document.getElementById('issuerName').focus();
+      issuerNameInput.focus();
       showToast('Add your business name so the invoice comes from you.');
       return;
     }
@@ -640,6 +648,9 @@
   }
   downloadBtn.addEventListener('click', handleDownload);
   logoInput.addEventListener('change', handleLogoChange);
+  ['issuerName', 'issuerEmail'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', previewSender);
+  });
   attachLogoBtn.addEventListener('click', function () { logoInput.click(); });
   removeLogoBtn.addEventListener('click', clearLogo);
 

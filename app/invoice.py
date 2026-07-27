@@ -22,7 +22,7 @@ def _money(value) -> str:
 
 # Where a client name ends: punctuation, a dash, or the work itself starting.
 _CLIENT_STOP = re.compile(
-    r"[,.;:]|\s[—–-]\s|\s(?=\d)|\s+(?:invoice|inv\.?|re:)\b",
+    r"[,.;:(\[]|\s[—–-]\s|\s(?=\d)|\s+(?:invoice|inv\.?|re:)\b",
     re.IGNORECASE,
 )
 
@@ -63,12 +63,14 @@ _TRAILING_AMOUNT = re.compile(r"\$?(\d+(?:\.\d+)?)\s*$")
 # "40 hours at 75/hr", and the same with words in between:
 # "40 hours of design and front-end build at 75/hr".
 _HOURS_AND_RATE = re.compile(
-    r"(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b"       # quantity
-    r"(?:\s+(?:of\s+)?[^,;]*?)??"                # optional description of the work
-    r"\s*(?:@|at)?\s*\$?(\d+(?:\.\d+)?)"         # rate
+    r"(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b"       # 1: quantity
+    r"(?:\s+(?:of\s+)?([^,;]*?))??"              # 2: the work, when named here
+    r"\s*(?:@|at)?\s*\$?(\d+(?:\.\d+)?)"         # 3: rate
     r"\s*(?:/\s*(?:hr|hour)|\s*per\s+hour)?",    # optional /hr suffix
     re.IGNORECASE,
 )
+
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 
 # A trailing "for <Client>" clause belongs in Bill To, not in the item label.
 # Only a capitalised name is stripped, so "Training for staff" survives intact.
@@ -95,10 +97,17 @@ def _split_segments(description: str) -> list[str]:
     return segments
 
 
-def _item_label(raw: str, context: str) -> str:
-    """Label for a line item, falling back to the preceding unpriced phrase."""
-    label = raw.strip(" -–—") or context or "Professional services"
-    return _TRAILING_CLIENT.sub("", label).strip(" -–—")
+def _item_label(*candidates: str) -> str:
+    """First usable label among the candidates, in order of preference.
+
+    Skips blanks and bare contact details — an email is never a description of
+    work — and drops a trailing client clause before returning.
+    """
+    for candidate in candidates:
+        label = _TRAILING_CLIENT.sub("", (candidate or "").strip(" -–—")).strip(" -–—")
+        if label and not _EMAIL.fullmatch(label):
+            return label
+    return "Professional services"
 
 
 def _extract_line_items(description: str) -> list[InvoiceLineItem]:
@@ -121,11 +130,11 @@ def _extract_line_items(description: str) -> list[InvoiceLineItem]:
         if hours:
             try:
                 qty = Decimal(hours.group(1))
-                rate = Decimal(hours.group(2))
+                rate = Decimal(hours.group(3))
             except InvalidOperation:
                 context = seg
                 continue
-            label = _item_label(seg[: hours.start()], context)
+            label = _item_label(seg[: hours.start()], hours.group(2), context)
             amount = qty * rate
             items.append(
                 InvoiceLineItem(

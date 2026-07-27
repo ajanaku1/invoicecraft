@@ -70,3 +70,26 @@ def test_unpriced_text_still_falls_back_to_one_default_item():
     items = _extract_line_items("Design a beautiful brand identity and a logo")
     assert len(items) == 1
     assert items[0].amount == "500.00"
+
+
+def test_label_comes_from_the_words_between_hours_and_rate():
+    items = _extract_line_items("6 hours of team training at 90/hr")
+    assert items[0].description == "Team training"
+    assert items[0].amount == "540.00"
+
+
+def test_an_email_never_becomes_a_line_item_label():
+    items = _extract_line_items("ap@finflow.com, 40 hours at 75/hr")
+    assert "@" not in items[0].description
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Redesign for FinFlow Ltd (ap@finflow.com), 40 hours at 75/hr",
+        "Redesign for FinFlow Ltd [billing], 40 hours at 75/hr",
+    ],
+)
+def test_client_name_stops_at_a_bracket(text):
+    name, _ = _extract_client(text)
+    assert name == "FinFlow Ltd"
