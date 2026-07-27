@@ -160,6 +160,8 @@ body{
 .features-mini{margin-top:36px;display:flex;flex-direction:column;gap:10px}
 .features-mini .feat{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted)}
 .feat-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.stats-line{margin-top:24px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:12px;color:var(--muted)}
+.stats-line .stat-num{font-family:var(--heading);font-size:15px;font-weight:700;color:var(--primary)}
 
 /* Preview Section */
 .preview-section{position:relative}
@@ -391,6 +393,11 @@ body{
         <div class="feat"><span class="feat-dot"></span> AI-generated line items &amp; pricing</div>
         <div class="feat"><span class="feat-dot"></span> Pay-per-invoice with x402</div>
         <div class="feat"><span class="feat-dot"></span> Download as PDF or share instantly</div>
+      </div>
+
+      <div class="stats-line" id="statsLine" hidden>
+        <span class="stat-num" id="statInvoices">0</span> invoices generated
+        &nbsp;·&nbsp; <span class="stat-num" id="statCollected">0.00</span> USD₮0 settled
       </div>
     </section>
 

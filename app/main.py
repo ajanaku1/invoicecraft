@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
+from app import store
 from app.invoice import create_invoice
 from app.models import InvoiceRequest, IssuerInfo
 from app.pdf_engine import generate_invoice_pdf
@@ -36,6 +37,17 @@ async def health():
         "service": "InvoiceCraft",
         "payment_mode": os.getenv("PAYMENT_VERIFY_MODE", "mock").lower(),
         "ai_enabled": bool(os.getenv("LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY")),
+    }
+
+
+@app.get("/stats")
+async def stats():
+    count = store.get_invoice_count()
+    fee = Decimal("0.50")
+    return {
+        "invoices_generated": count,
+        "usdt_collected": str((count * fee).quantize(Decimal("0.01"))),
+        "price_per_invoice": "0.50",
     }
 
 
@@ -127,6 +139,11 @@ async def invoice_endpoint(req: InvoiceRequest):
                     "message": "PDF generation failed",
                 },
             )
+
+        try:
+            store.incr_invoices()
+        except Exception:
+            logger.warning("Failed to record invoice stat", exc_info=True)
 
         return {
             "invoice": invoice.model_dump(),

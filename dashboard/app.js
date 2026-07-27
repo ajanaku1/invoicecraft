@@ -411,6 +411,19 @@
     }
   }
 
+  function loadStats() {
+    fetch(API_BASE + '/stats')
+      .then(function (r) { return r.json(); })
+      .then(function (s) {
+        if (!s || typeof s.invoices_generated === 'undefined') return;
+        document.getElementById('statInvoices').textContent = s.invoices_generated;
+        document.getElementById('statCollected').textContent = s.usdt_collected;
+        document.getElementById('statsLine').hidden = false;
+      })
+      .catch(function () {});
+  }
+  loadStats();
+
   generateBtn.addEventListener('click', handleGenerate);
   connectBtn.addEventListener('click', connectWallet);
   payBtn.addEventListener('click', handlePay);

@@ -144,6 +144,42 @@ def next_invoice_seq(day: str) -> int:
             conn.close()
 
 
+def incr_invoices() -> int:
+    """Count a successfully generated (paid) invoice; returns the running total."""
+    if _redis_cfg():
+        return int(_redis("INCR", "stats:invoices"))
+    with _lock:
+        conn = _conn()
+        try:
+            row = conn.execute(
+                "SELECT n FROM counters WHERE day = ?", ("__invoices__",)
+            ).fetchone()
+            n = (row[0] if row else 0) + 1
+            conn.execute(
+                "INSERT OR REPLACE INTO counters (day, n) VALUES (?, ?)",
+                ("__invoices__", n),
+            )
+            conn.commit()
+            return n
+        finally:
+            conn.close()
+
+
+def get_invoice_count() -> int:
+    if _redis_cfg():
+        v = _redis("GET", "stats:invoices")
+        return int(v) if v else 0
+    with _lock:
+        conn = _conn()
+        try:
+            row = conn.execute(
+                "SELECT n FROM counters WHERE day = ?", ("__invoices__",)
+            ).fetchone()
+        finally:
+            conn.close()
+    return row[0] if row else 0
+
+
 def tx_consumed(tx_hash: str) -> bool:
     if not tx_hash:
         return False
