@@ -50,9 +50,13 @@ By default the service runs in demo mode: payment verification is mocked and par
 
 ## How it works
 
-1. **POST a job description** to `/api/v1/invoice`. The server responds with `402 Payment Required` and a payment challenge (`challenge_id`, receiver address, amount, and X Layer chain details).
-2. **Pay 0.50 USDT** on X Layer to the receiver address. In the demo UI, click Connect Wallet and Pay. From the API, send the transfer with any X Layer wallet.
-3. **Re-POST** with `description`, `payment_tx_hash`, and `challenge_id`. The server verifies the payment, then returns the invoice JSON and a base64-encoded PDF.
+Payment is handled by the official [OKX Onchain OS Payment SDK](https://web3.okx.com/onchainos/dev-docs/payments/service-seller-sdk) (`okxweb3-app-x402`), which gates `POST /api/v1/invoice`:
+
+1. **POST a job description** to `/api/v1/invoice`. The SDK responds with `402 Payment Required` and a `PAYMENT-REQUIRED` header carrying the base64-encoded x402 requirements (scheme `exact`, network `eip155:196`, asset USD₮0, amount in base units, `payTo`).
+2. **Pay 0.50 USDT** on X Layer. The OKX Agentic Wallet does this automatically and retries the request with a `PAYMENT-SIG` header.
+3. **The SDK verifies and settles** the payment through the OKX facilitator, then the service returns the invoice JSON, a base64-encoded PDF, and a `PAYMENT-RESPONSE` proof header.
+
+When the OKX credentials are absent (local dev, tests, demo), the service falls back to its own x402 challenge: re-POST with `description`, `payment_tx_hash`, and `challenge_id` and it verifies the USDT transfer directly via web3.
 
 ---
 
@@ -65,25 +69,31 @@ By default the service runs in demo mode: payment verification is mocked and par
 { "description": "Website redesign for FinFlow, 40 hours at 75/hr, plus hosting setup 200" }
 ```
 
-**402 response** (payment required):
+**402 response** (payment required). The requirements travel base64-encoded in the `PAYMENT-REQUIRED` header; decoded, they are:
 ```json
 {
-  "error": "payment_required",
-  "message": "Pay 0.50 USDT on X Layer to generate invoice",
-  "payment": {
-    "amount": "0.50",
-    "token": "USDT",
-    "chain": "eip155:196",
-    "chain_id": "0xc4",
-    "receiver": "0x...",
-    "challenge_id": "abc123...",
-    "memo": "abc123...",
-    "token_contract": "",
-    "decimals": 6,
-    "rpc_url": ""
-  }
+  "x402Version": 2,
+  "error": "Payment required",
+  "resource": {
+    "url": "https://invoicecraft-e7yg.onrender.com/api/v1/invoice",
+    "description": "InvoiceCraft AI invoice generation",
+    "mimeType": "application/json"
+  },
+  "accepts": [
+    {
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "amount": "500000",
+      "payTo": "0x...",
+      "maxTimeoutSeconds": 300,
+      "extra": { "name": "USD₮0", "version": "1" }
+    }
+  ]
 }
 ```
+
+An x402 client (the OKX Agentic Wallet, or any SDK client) pays and retries the same request with a `PAYMENT-SIG` header; no second body shape is needed. The fields below describe the fallback flow used when OKX credentials are not configured.
 
 **Request** (second call, after payment):
 ```json
@@ -128,7 +138,13 @@ By default the service runs in demo mode: payment verification is mocked and par
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ASP_WALLET` | (required) | Receiver address for payments, shown as the issuer on the invoice |
+| `ASP_WALLET` | (required) | Receiver address for payments (`payTo`), shown as the issuer on the invoice |
+| `OKX_API_KEY` | (unset) | OKX Onchain OS dev-portal API key. With the two below, enables the official Payment SDK |
+| `OKX_SECRET_KEY` | (unset) | Secret key used for the facilitator's HMAC-SHA256 signing |
+| `OKX_PASSPHRASE` | (unset) | Dev-portal passphrase |
+| `OKX_BASE_URL` | `https://web3.okx.com` | Facilitator base URL |
+| `INVOICE_PRICE_USDT` | `0.50` | Price per invoice, advertised in the 402 |
+| `PAYMENT_CHAIN` | `eip155:196` | CAIP-2 network for payment (X Layer mainnet; testnet is `eip155:1952`) |
 | `PAYMENT_VERIFY_MODE` | `mock` | `mock` accepts any well-formed tx hash (demo/dev). `onchain` verifies a real USDT transfer on X Layer |
 | `XLAYER_RPC` | (unset) | X Layer RPC URL, required for `onchain` mode |
 | `USDT_CONTRACT` | (unset) | USDT token address on X Layer, required for `onchain` mode |
@@ -170,7 +186,8 @@ Browser (dashboard) ──POST──> FastAPI app (app/main.py)
 | `app/invoice.py` | Description parsing, invoice creation, numbering |
 | `app/ai_parser.py` | LLM-based line-item extraction |
 | `app/pdf_engine.py` | ReportLab PDF layout and rendering |
-| `app/x402.py` | Payment challenge generation and verification |
+| `app/okx_payments.py` | Official OKX Payment SDK middleware (402 / PAYMENT-SIG / settlement) |
+| `app/x402.py` | Fallback payment challenge generation and verification |
 | `app/store.py` | SQLite persistence for challenges and counter |
 | `app/tax.py` | Configurable tax rate |
 | `app/models.py` | Pydantic request/response models |
@@ -180,7 +197,7 @@ Browser (dashboard) ──POST──> FastAPI app (app/main.py)
 ## Sponsor integrations
 
 - **OKX.AI**: InvoiceCraft is built as an Agent Service Provider, listed on the OKX.AI marketplace.
-- **x402**: pay-per-call billing. Each invoice costs 0.50 USDT, collected before the PDF is generated.
+- **x402 via the official OKX Payment SDK** (`okxweb3-app-x402`): pay-per-call billing. Each invoice costs 0.50 USDT, verified and settled through the OKX facilitator before the PDF is generated.
 - **X Layer (`eip155:196`)**: payments settle in USDT on X Layer. On-chain mode verifies the transfer directly via web3.
 - **OKX Agentic Wallet**: users pay from the dashboard by connecting a wallet, or from any wallet that supports X Layer USDT transfers.
 
@@ -192,7 +209,7 @@ Browser (dashboard) ──POST──> FastAPI app (app/main.py)
 python3 -m pytest -q
 ```
 
-31 tests cover description parsing, tax and totals, PDF generation, the x402 challenge lifecycle, and the full request/response flow.
+38 tests cover description parsing, tax and totals, PDF generation, the x402 challenge lifecycle, the OKX Payment SDK middleware, and the full request/response flow. Requires Python 3.11+ (an OKX Payment SDK constraint).
 
 ---
 
@@ -204,7 +221,8 @@ InvoiceCraft/
 │   ├── main.py      # Routes + dashboard mount
 │   ├── invoice.py   # Parsing + invoice assembly
 │   ├── ai_parser.py # LLM line-item extraction
-│   ├── x402.py      # Payment challenges + verification
+│   ├── okx_payments.py # Official OKX Payment SDK middleware
+│   ├── x402.py      # Fallback payment challenges + verification
 │   ├── pdf_engine.py# PDF rendering
 │   ├── store.py     # SQLite persistence
 │   ├── tax.py       # Tax rate

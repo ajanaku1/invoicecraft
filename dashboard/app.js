@@ -245,6 +245,19 @@
     });
   }
 
+  // The OKX Payment SDK returns the x402 requirements base64-encoded in the
+  // PAYMENT-REQUIRED header with an empty body; the fallback challenge repeats
+  // them in the body. Read the header first, then fall back to the body.
+  function readPaymentRequirements(res, data) {
+    var header = res.headers.get('payment-required');
+    if (!header) return data;
+    try {
+      return JSON.parse(decodeURIComponent(escape(atob(header))));
+    } catch (e) {
+      return data;
+    }
+  }
+
   function requestChallenge(description) {
     return fetch(API_BASE + '/api/v1/invoice', {
       method: 'POST',
@@ -252,7 +265,7 @@
       body: JSON.stringify({ description: description })
     }).then(function (res) {
       return res.json().then(function (data) {
-        return { status: res.status, data: data };
+        return { status: res.status, data: readPaymentRequirements(res, data) };
       });
     });
   }
