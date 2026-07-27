@@ -136,7 +136,12 @@ By default the service runs in demo mode: payment verification is mocked and par
 | `LLM_API_KEY` | (unset) | Anthropic API key. Enables LLM line-item parsing, falls back to the heuristic parser when unset |
 | `LLM_MODEL` | `claude-sonnet-5` | Model used for parsing |
 | `TAX_RATE` | `0.08` | Tax rate as a decimal |
-| `DB_PATH` | temp dir | SQLite path for challenges and the invoice counter |
+| `DB_PATH` | temp dir | SQLite path (used when Upstash is not configured) |
+| `UPSTASH_REDIS_REST_URL` | (unset) | Upstash Redis REST URL — enables durable persistence across restarts |
+| `UPSTASH_REDIS_REST_TOKEN` | (unset) | Upstash Redis REST token (required with the URL above) |
+| `LLM_API_STYLE` | `anthropic` | `anthropic` or `openai` (for DeepSeek/OpenRouter/OpenCode) |
+| `LLM_API_URL` | provider default | Chat/messages endpoint for the chosen style |
+| `LLM_MAX_TOKENS` | `4096` | Token budget (keep high for reasoning models) |
 
 ---
 
