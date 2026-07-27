@@ -13,9 +13,6 @@ jobs:
     steps:
       - name: Warm the service
         run: |
-          for path in /health "/api/v1/invoice"; do
-            code=$(curl -s -o /dev/null -m 60 -w "%{http_code}" -X POST \
-              "https://invoicecraft-e7yg.onrender.com$path" \
-              -H "Content-Type: application/json" -d '{}' || echo "000")
-            echo "$path -> $code"
-          done
+          code=$(curl -s -o /dev/null -m 60 -w "%{http_code}" \
+            "https://invoicecraft-e7yg.onrender.com/health" || echo "000")
+          echo "GET /health -> $code"
