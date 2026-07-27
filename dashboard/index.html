@@ -4,8 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>InvoiceCraft — AI Invoice Generator</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
 :root{
   --bg:#f5f2eb;
   --surface:#fff;
@@ -328,17 +330,17 @@ body{
       <span class="logo-text">InvoiceCraft</span>
     </div>
     <nav class="top-nav" aria-label="Main">
-      <a href="#">Invoices</a>
-      <a href="#">Templates</a>
-      <a href="#">API <span class="nav-badge">x402</span></a>
-      <a href="#">Docs</a>
+      <a href="#create">Create</a>
+      <a href="#preview">Invoice</a>
+      <a href="/docs" target="_blank" rel="noopener">API <span class="nav-badge">x402</span></a>
+      <a href="https://github.com/ajanaku1/invoicecraft" target="_blank" rel="noopener">Docs</a>
     </nav>
   </header>
 
   <main class="hero">
 
     <!-- ─── Left: Input Panel ─── -->
-    <section class="input-panel" aria-label="Invoice input">
+    <section class="input-panel" id="create" aria-label="Invoice input">
       <h1>Create an Invoice</h1>
       <p class="subtitle">AI-powered invoices with x402 micropayments. Describe the work and get a ready-to-ship invoice in seconds.</p>
 
@@ -396,7 +398,7 @@ body{
     </section>
 
     <!-- ─── Right: Invoice Preview ─── -->
-    <section class="preview-section" aria-label="Invoice preview">
+    <section class="preview-section" id="preview" aria-label="Invoice preview">
       <div class="preview-header">
         <span class="preview-label">Invoice Preview</span>
         <div class="preview-actions">
