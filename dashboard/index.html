@@ -86,6 +86,28 @@ body{
 }
 .input-group textarea::placeholder{color:#b8b0a4}
 [data-state="payment"] .input-group textarea,[data-state="invoice"] .input-group textarea{opacity:.6}
+.attach-row{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.btn-attach{
+  display:inline-flex;align-items:center;gap:6px;padding:7px 12px;
+  background:transparent;border:1px dashed var(--border);border-radius:8px;
+  font-family:var(--body);font-size:12px;font-weight:500;color:var(--muted);
+  cursor:pointer;transition:border-color .2s,color .2s;
+}
+.btn-attach:hover{border-color:var(--accent);color:var(--primary)}
+.btn-attach .clip{font-size:13px}
+.attach-chip{
+  display:inline-flex;align-items:center;gap:8px;padding:5px 8px 5px 5px;
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+}
+.attach-name{
+  font-size:11px;color:var(--text);max-width:120px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;
+}
+.attach-remove{
+  background:none;border:none;color:var(--muted);font-size:16px;line-height:1;
+  cursor:pointer;padding:0 2px;
+}
+.attach-remove:hover{color:var(--error)}
 .details{margin-top:18px;border-top:1px solid var(--border);padding-top:14px}
 .details>summary{
   font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;
@@ -112,8 +134,8 @@ body{
 .field-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5}
 .logo-row{display:flex;align-items:center;gap:12px;margin-top:4px}
 .logo-preview{
-  width:56px;height:40px;object-fit:contain;border:1px solid var(--border);
-  border-radius:6px;background:var(--surface);padding:3px;
+  width:34px;height:26px;object-fit:contain;border-radius:4px;
+  background:var(--bg);padding:2px;display:block;
 }
 .fieldset-label{
   font-size:11px;font-weight:600;color:var(--text);margin:14px 0 8px;
@@ -382,6 +404,19 @@ body{
         <label for="desc">Job Description</label>
         <textarea id="desc" placeholder="e.g. Brand strategy consultation for early-stage SaaS startup — includes competitor audit, positioning framework, and visual identity direction." rows="4" aria-describedby="descHint">Website redesign for FinFlow — responsive rebuild, CMS integration, and performance optimization.</textarea>
 
+        <!-- Attach your own logo, right where the prompt is. -->
+        <div class="attach-row">
+          <input id="logoInput" type="file" accept="image/png,image/jpeg" hidden>
+          <button type="button" class="btn-attach" id="attachLogoBtn">
+            <span class="clip" aria-hidden="true">📎</span> Add your logo
+          </button>
+          <span class="attach-chip" id="logoChip" hidden>
+            <img id="logoPreview" class="logo-preview" alt="">
+            <span class="attach-name" id="logoName">logo.png</span>
+            <button type="button" class="attach-remove" id="removeLogoBtn" aria-label="Remove logo">×</button>
+          </span>
+        </div>
+
         <details class="details" id="invoiceDetails">
           <summary>Invoice details &amp; branding</summary>
           <div class="details-body">
@@ -426,14 +461,6 @@ body{
               <div class="field">
                 <label for="taxRate">Tax rate</label>
                 <input id="taxRate" type="text" placeholder="0.08" inputmode="decimal">
-              </div>
-              <div class="field full">
-                <label for="logoInput">Brand logo</label>
-                <div class="logo-row">
-                  <input id="logoInput" type="file" accept="image/png,image/jpeg">
-                  <img id="logoPreview" class="logo-preview" alt="Logo preview" hidden>
-                </div>
-                <p class="field-note">PNG or JPEG, up to 2 MB. Appears at the top of the PDF.</p>
               </div>
             </div>
             <p class="field-note">

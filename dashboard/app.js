@@ -21,6 +21,10 @@
   var toast = document.getElementById('toast');
   var logoInput = document.getElementById('logoInput');
   var logoPreview = document.getElementById('logoPreview');
+  var logoChip = document.getElementById('logoChip');
+  var logoName = document.getElementById('logoName');
+  var attachLogoBtn = document.getElementById('attachLogoBtn');
+  var removeLogoBtn = document.getElementById('removeLogoBtn');
   var previewLogo = document.getElementById('previewLogo');
   var previewIssuerName = document.getElementById('previewIssuerName');
   var previewIssuerLines = document.getElementById('previewIssuerLines');
@@ -568,13 +572,18 @@
 
   var MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
+  function clearLogo() {
+    session.logo = null;
+    logoInput.value = '';
+    logoChip.hidden = true;
+    attachLogoBtn.hidden = false;
+    previewLogo.hidden = true;
+  }
+
   function handleLogoChange() {
     var file = logoInput.files && logoInput.files[0];
-    if (!file) {
-      session.logo = null;
-      logoPreview.hidden = true;
-      return;
-    }
+    if (!file) return clearLogo();
+
     if (file.size > MAX_LOGO_BYTES) {
       showToast('That logo is over 2 MB — pick a smaller file.');
       logoInput.value = '';
@@ -584,7 +593,10 @@
     reader.onload = function () {
       session.logo = reader.result;
       logoPreview.src = reader.result;
-      logoPreview.hidden = false;
+      logoName.textContent = file.name;
+      logoChip.hidden = false;
+      attachLogoBtn.hidden = true;
+      showToast('Logo attached — it will brand your invoice.');
     };
     reader.onerror = function () { showToast('Could not read that image file.'); };
     reader.readAsDataURL(file);
@@ -616,6 +628,8 @@
   }
   downloadBtn.addEventListener('click', handleDownload);
   logoInput.addEventListener('change', handleLogoChange);
+  attachLogoBtn.addEventListener('click', function () { logoInput.click(); });
+  removeLogoBtn.addEventListener('click', clearLogo);
 
   setState(STATE.INPUT);
 })();
