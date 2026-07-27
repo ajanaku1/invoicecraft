@@ -5,7 +5,9 @@ from pydantic import BaseModel
 
 
 class InvoiceRequest(BaseModel):
-    description: str
+    # Optional so an unpaid probe (empty body) still reaches the x402 402 path
+    # instead of failing request validation.
+    description: Optional[str] = None
     payment_tx_hash: Optional[str] = None
     # Legacy field, kept for backward compatibility; x402 uses the on-chain tx
     # as the payment proof, so no server-issued challenge is required.

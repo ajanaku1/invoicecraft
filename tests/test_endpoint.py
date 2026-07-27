@@ -61,24 +61,35 @@ def test_invoice_with_payment_no_challenge(monkeypatch):
     assert data["invoice"]["issuer"]["address"] == "0xASPWalletAddress"
 
 
-def test_invoice_empty_description():
-    response = client.post(
-        "/api/v1/invoice",
-        json={"description": ""},
-    )
-    assert response.status_code == 400
-    data = response.json()
-    assert data["error"] == "invalid_description"
+GOOD_TX = "0x" + "01" * 32
 
 
-def test_invoice_short_description():
+def test_probe_returns_x402(monkeypatch):
+    monkeypatch.setenv("ASP_WALLET", "0xASPWalletAddress")
+    # The x402 caller probes with an empty/minimal body — it must get the 402,
+    # not a validation error, or it cannot obtain the payment requirements.
+    assert client.post("/api/v1/invoice", json={}).status_code == 402
+    assert client.post("/api/v1/invoice").status_code == 402
+
+
+def test_invoice_empty_description(monkeypatch):
+    monkeypatch.setenv("ASP_WALLET", "0xASPWalletAddress")
     response = client.post(
         "/api/v1/invoice",
-        json={"description": "Hi"},
+        json={"description": "", "payment_tx_hash": GOOD_TX},
     )
     assert response.status_code == 400
-    data = response.json()
-    assert data["error"] == "invalid_description"
+    assert response.json()["error"] == "invalid_description"
+
+
+def test_invoice_short_description(monkeypatch):
+    monkeypatch.setenv("ASP_WALLET", "0xASPWalletAddress")
+    response = client.post(
+        "/api/v1/invoice",
+        json={"description": "Hi", "payment_tx_hash": GOOD_TX},
+    )
+    assert response.status_code == 400
+    assert response.json()["error"] == "invalid_description"
 
 
 def test_invoice_too_long_description(monkeypatch):
@@ -86,8 +97,7 @@ def test_invoice_too_long_description(monkeypatch):
     desc = "Build a website. " * 1000
     response = client.post(
         "/api/v1/invoice",
-        json={"description": desc},
+        json={"description": desc, "payment_tx_hash": GOOD_TX},
     )
     assert response.status_code == 400
-    data = response.json()
-    assert data["error"] == "invalid_description"
+    assert response.json()["error"] == "invalid_description"

@@ -5,8 +5,9 @@ import json
 import logging
 import os
 from decimal import Decimal
+from typing import Optional
 
-from fastapi import FastAPI, Request
+from fastapi import Body, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -93,20 +94,11 @@ async def stats():
 
 
 @app.post("/api/v1/invoice")
-async def invoice_endpoint(req: InvoiceRequest, request: Request):
+async def invoice_endpoint(
+    request: Request,
+    req: Optional[InvoiceRequest] = Body(default=None),
+):
     resource_url = str(request.url)
-    desc = req.description.strip()
-
-    if not (10 <= len(desc) <= 2000):
-        msg = (
-            "Description must be at least 10 characters"
-            if len(desc) < 10
-            else "Description must not exceed 2000 characters"
-        )
-        return JSONResponse(
-            status_code=400,
-            content={"error": "invalid_description", "message": msg},
-        )
 
     asp_wallet = os.getenv("ASP_WALLET", "")
     if not asp_wallet:
@@ -118,67 +110,82 @@ async def invoice_endpoint(req: InvoiceRequest, request: Request):
             },
         )
 
-    if req.payment_tx_hash:
-        verify_result = verify_payment(
-            tx_hash=req.payment_tx_hash,
-            challenge_id=req.challenge_id,
-            expected_amount=Decimal("0.50"),
-            expected_receiver=asp_wallet,
+    tx_hash = req.payment_tx_hash if req else None
+
+    # x402: any unpaid request (including an empty probe body) must receive the
+    # payment challenge first, before any business-input validation.
+    if not tx_hash:
+        return _payment_required_response(resource_url, asp_wallet)
+
+    desc = (req.description or "").strip() if req else ""
+    if not (10 <= len(desc) <= 2000):
+        msg = (
+            "Description must be at least 10 characters"
+            if len(desc) < 10
+            else "Description must not exceed 2000 characters"
+        )
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_description", "message": msg},
         )
 
-        if not verify_result.get("verified"):
-            # Re-advertise x402 requirements so the caller can retry correctly.
-            return _payment_required_response(resource_url, asp_wallet)
+    verify_result = verify_payment(
+        tx_hash=tx_hash,
+        challenge_id=req.challenge_id if req else None,
+        expected_amount=Decimal("0.50"),
+        expected_receiver=asp_wallet,
+    )
+    if not verify_result.get("verified"):
+        # Re-advertise x402 requirements so the caller can retry correctly.
+        return _payment_required_response(resource_url, asp_wallet)
 
-        tax_rate = get_tax_rate()
-        issuer = IssuerInfo(
-            name=os.getenv("INVOICE_ISSUER_NAME", "InvoiceCraft AI"),
-            address=asp_wallet,
-            email=os.getenv("INVOICE_ISSUER_EMAIL", "invoice@craft.dev"),
+    tax_rate = get_tax_rate()
+    issuer = IssuerInfo(
+        name=os.getenv("INVOICE_ISSUER_NAME", "InvoiceCraft AI"),
+        address=asp_wallet,
+        email=os.getenv("INVOICE_ISSUER_EMAIL", "invoice@craft.dev"),
+    )
+
+    try:
+        invoice = await run_in_threadpool(
+            create_invoice,
+            description=desc,
+            tax_rate=tax_rate,
+            issuer=issuer,
+            payment_tx_hash=tx_hash,
+        )
+    except Exception:
+        logger.exception("Invoice creation failed")
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "parse_error",
+                "message": "Cannot extract invoice data from description",
+            },
         )
 
-        try:
-            invoice = await run_in_threadpool(
-                create_invoice,
-                description=desc,
-                tax_rate=tax_rate,
-                issuer=issuer,
-                payment_tx_hash=req.payment_tx_hash,
-            )
-        except Exception as exc:
-            logger.exception("Invoice creation failed")
-            return JSONResponse(
-                status_code=422,
-                content={
-                    "error": "parse_error",
-                    "message": "Cannot extract invoice data from description",
-                },
-            )
+    try:
+        pdf_bytes = generate_invoice_pdf(invoice)
+        pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+    except Exception:
+        logger.exception("PDF generation failed")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "server_error",
+                "message": "PDF generation failed",
+            },
+        )
 
-        try:
-            pdf_bytes = generate_invoice_pdf(invoice)
-            pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
-        except Exception as exc:
-            logger.exception("PDF generation failed")
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "error": "server_error",
-                    "message": "PDF generation failed",
-                },
-            )
+    try:
+        store.incr_invoices()
+    except Exception:
+        logger.warning("Failed to record invoice stat", exc_info=True)
 
-        try:
-            store.incr_invoices()
-        except Exception:
-            logger.warning("Failed to record invoice stat", exc_info=True)
-
-        return {
-            "invoice": invoice.model_dump(),
-            "pdf": pdf_b64,
-        }
-
-    return _payment_required_response(resource_url, asp_wallet)
+    return {
+        "invoice": invoice.model_dump(),
+        "pdf": pdf_b64,
+    }
 
 
 # Serve the demo dashboard from the same origin as the API (so the browser's
