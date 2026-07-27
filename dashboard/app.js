@@ -187,7 +187,7 @@
       .request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }] })
       .catch(function (err) {
         if (err && err.code === 4902) {
-          var rpc = session.payment && session.payment.rpc_url;
+          var rpc = session.payment && session.payment.rpc;
           return provider.request({
             method: 'wallet_addEthereumChain',
             params: [{
@@ -230,16 +230,17 @@
     return hex;
   }
 
-  // Build ERC-20 transfer(receiver, amount) calldata and send it.
+  // Build ERC-20 transfer(payTo, amount) calldata and send it. amountBase is
+  // already in token base units (from the x402 requirements).
   function payWithWallet(payment) {
     var provider = getProvider();
-    var chainId = payment.chain_id || '0xc4';
-    var units = BigInt(Math.round(parseFloat(payment.amount) * Math.pow(10, payment.decimals || 6)));
-    var data = '0xa9059cbb' + pad32(payment.receiver) + pad32(units.toString(16));
+    var chainId = payment.chainIdHex || '0xc4';
+    var units = BigInt(payment.amountBase);
+    var data = '0xa9059cbb' + pad32(payment.payTo) + pad32(units.toString(16));
     return ensureChain(provider, chainId).then(function () {
       return provider.request({
         method: 'eth_sendTransaction',
-        params: [{ from: wallet.account, to: payment.token_contract, data: data }]
+        params: [{ from: wallet.account, to: payment.asset, data: data }]
       });
     });
   }
@@ -256,14 +257,13 @@
     });
   }
 
-  function requestInvoice(description, txHash, challengeId) {
+  function requestInvoice(description, txHash) {
     return fetch(API_BASE + '/api/v1/invoice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         description: description,
-        payment_tx_hash: txHash,
-        challenge_id: challengeId
+        payment_tx_hash: txHash
       })
     }).then(function (res) {
       return res.json().then(function (data) {
@@ -291,13 +291,23 @@
     generateBtn.textContent = 'Requesting…';
 
     requestChallenge(text).then(function (res) {
-      if (res.status === 402 && res.data.payment) {
-        session.payment = res.data.payment;
-        challengeIdEl.textContent = shortHex(session.payment.challenge_id);
-        var canPayOnChain = !!session.payment.token_contract;
+      var accept = res.data && res.data.accepts && res.data.accepts[0];
+      if (res.status === 402 && accept) {
+        var decimals = 6;
+        session.payment = {
+          payTo: accept.payTo,
+          asset: accept.asset,
+          amountBase: accept.amount,
+          amountDisplay: (parseInt(accept.amount, 10) / Math.pow(10, decimals)).toFixed(2),
+          network: accept.network,
+          chainIdHex: '0xc4',
+          rpc: 'https://rpc.xlayer.tech'
+        };
+        challengeIdEl.textContent = shortHex(accept.payTo);
+        var canPayOnChain = !!accept.asset;
         payNote.textContent = canPayOnChain
-          ? 'Connect a wallet to pay 0.50 USDT on X Layer.'
-          : 'Demo mode: payment is simulated (no USDT contract configured).';
+          ? 'Connect a wallet to pay ' + session.payment.amountDisplay + ' USD₮0 on X Layer.'
+          : 'Demo mode: payment is simulated (no asset configured).';
         setState(STATE.PAYMENT);
       } else if (res.status === 400) {
         showToast(res.data.message || 'Invalid description.');
@@ -324,7 +334,7 @@
 
   function submitPayment(txHash) {
     var text = textarea.value.trim();
-    requestInvoice(text, txHash, session.payment.challenge_id).then(function (res) {
+    requestInvoice(text, txHash).then(function (res) {
       payBtn.classList.remove('loading');
       if (res.status === 200 && res.data.invoice) {
         session.invoice = res.data.invoice;
@@ -353,7 +363,7 @@
     if (currentState !== STATE.PAYMENT || payBtn.disabled || !session.payment) return;
 
     var payment = session.payment;
-    var canPayOnChain = !!payment.token_contract;
+    var canPayOnChain = !!payment.asset;
 
     payBtn.disabled = true;
     payBtn.classList.add('loading');

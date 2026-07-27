@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
 from decimal import Decimal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,10 +17,50 @@ from app.invoice import create_invoice
 from app.models import InvoiceRequest, IssuerInfo
 from app.pdf_engine import generate_invoice_pdf
 from app.tax import get_tax_rate
-from app.x402 import generate_challenge, verify_payment
+from app.x402 import verify_payment
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="InvoiceCraft")
+
+PRICE_USDT = Decimal(os.getenv("INVOICE_PRICE_USDT", "0.50"))
+
+
+def _x402_requirements(resource_url: str, asp_wallet: str) -> dict:
+    """Build the standard x402 (v2) payment-requirements object."""
+    decimals = int(os.getenv("USDT_DECIMALS", "6"))
+    amount_base = str(int((PRICE_USDT * (10 ** decimals)).to_integral_value()))
+    return {
+        "x402Version": 2,
+        "error": "Payment required",
+        "resource": {
+            "url": resource_url,
+            "description": "InvoiceCraft invoice generation",
+            "mimeType": "",
+        },
+        "accepts": [
+            {
+                "scheme": "exact",
+                "network": os.getenv("PAYMENT_CHAIN", "eip155:196"),
+                "amount": amount_base,
+                "asset": os.getenv("USDT_CONTRACT", ""),
+                "payTo": asp_wallet,
+                "maxTimeoutSeconds": 300,
+                "extra": {
+                    "name": os.getenv("USDT_NAME", "USD₮0"),
+                    "version": os.getenv("USDT_VERSION", "1"),
+                },
+            }
+        ],
+    }
+
+
+def _payment_required_response(resource_url: str, asp_wallet: str) -> JSONResponse:
+    """A 402 that advertises x402 requirements in both the header and body."""
+    body = _x402_requirements(resource_url, asp_wallet)
+    header = base64.b64encode(
+        json.dumps(body, ensure_ascii=False).encode("utf-8")
+    ).decode("ascii")
+    return JSONResponse(status_code=402, headers={"payment-required": header}, content=body)
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,7 +93,8 @@ async def stats():
 
 
 @app.post("/api/v1/invoice")
-async def invoice_endpoint(req: InvoiceRequest):
+async def invoice_endpoint(req: InvoiceRequest, request: Request):
+    resource_url = str(request.url)
     desc = req.description.strip()
 
     if not (10 <= len(desc) <= 2000):
@@ -85,22 +127,8 @@ async def invoice_endpoint(req: InvoiceRequest):
         )
 
         if not verify_result.get("verified"):
-            return JSONResponse(
-                status_code=402,
-                headers={
-                    "X-Payment-Required": "true",
-                    "X-Payment-Status": "pending",
-                    "X-Payment-Tx-Hash": req.payment_tx_hash,
-                },
-                content={
-                    "error": "payment_failed",
-                    "message": "Payment verification failed on X Layer",
-                    "payment": {
-                        "tx_hash": req.payment_tx_hash,
-                        "status": "failed",
-                    },
-                },
-            )
+            # Re-advertise x402 requirements so the caller can retry correctly.
+            return _payment_required_response(resource_url, asp_wallet)
 
         tax_rate = get_tax_rate()
         issuer = IssuerInfo(
@@ -150,38 +178,7 @@ async def invoice_endpoint(req: InvoiceRequest):
             "pdf": pdf_b64,
         }
 
-    challenge_id = generate_challenge()
-
-    return JSONResponse(
-        status_code=402,
-        headers={
-            "X-Payment-Required": "true",
-            "X-Payment-Challenge": challenge_id,
-            "X-Payment-Amount": "0.50",
-            "X-Payment-Token": "USDT",
-            "X-Payment-Chain": "eip155:196",
-            "X-Payment-Receiver": asp_wallet,
-        },
-        content={
-            "error": "payment_required",
-            "message": "Pay 0.50 USDT on X Layer to generate invoice",
-            "payment": {
-                "amount": "0.50",
-                "token": "USDT",
-                "chain": "eip155:196",
-                "chain_id": "0xc4",
-                "receiver": asp_wallet,
-                "challenge_id": challenge_id,
-                "memo": challenge_id,
-                # On-chain details for wallet payment. token_contract is empty
-                # unless the operator configures USDT_CONTRACT; when empty the UI
-                # falls back to simulated (mock) payment.
-                "token_contract": os.getenv("USDT_CONTRACT", ""),
-                "decimals": int(os.getenv("USDT_DECIMALS", "6")),
-                "rpc_url": os.getenv("XLAYER_RPC", ""),
-            },
-        },
-    )
+    return _payment_required_response(resource_url, asp_wallet)
 
 
 # Serve the demo dashboard from the same origin as the API (so the browser's

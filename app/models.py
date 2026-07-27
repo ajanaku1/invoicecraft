@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 from typing import Optional
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 
 class InvoiceRequest(BaseModel):
     description: str
     payment_tx_hash: Optional[str] = None
+    # Legacy field, kept for backward compatibility; x402 uses the on-chain tx
+    # as the payment proof, so no server-issued challenge is required.
     challenge_id: Optional[str] = None
-
-    @model_validator(mode="after")
-    def check_challenge_if_paying(self):
-        if self.payment_tx_hash and not self.challenge_id:
-            raise ValueError("challenge_id is required when payment_tx_hash is provided")
-        return self
 
 
 class InvoiceLineItem(BaseModel):
