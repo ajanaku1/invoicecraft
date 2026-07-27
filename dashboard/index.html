@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>InvoiceCraft — AI Invoice Generator</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" href="logo.png">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
@@ -41,9 +41,7 @@ body{
 }
 .logo{display:flex;align-items:center;gap:10px;text-decoration:none}
 .logo-icon{
-  width:30px;height:30px;background:var(--primary);border-radius:6px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:13px;color:var(--accent);font-weight:700;font-family:var(--heading);
+  width:32px;height:32px;border-radius:6px;object-fit:cover;display:block;
 }
 .logo-text{
   font-family:var(--heading);font-size:19px;font-weight:700;
@@ -326,7 +324,7 @@ body{
 
   <header class="top-bar" role="banner">
     <div class="logo" aria-label="InvoiceCraft home">
-      <span class="logo-icon" aria-hidden="true">IC</span>
+      <img class="logo-icon" src="logo.png" alt="" aria-hidden="true" width="32" height="32">
       <span class="logo-text">InvoiceCraft</span>
     </div>
     <nav class="top-nav" aria-label="Main">
