@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recovery approval · InvoiceCraft</title>
+  <style>
+    :root{--paper:#f5f2eb;--sheet:#fffdf8;--teal:#173f3d;--brass:#b8893e;--ink:#2c2b29;--muted:#706b63;--rule:#d8cfbf;--green:#087b57;--red:#a83a34;--mono:"SFMono-Regular",Menlo,monospace}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 system-ui,sans-serif}.shell{width:min(900px,calc(100% - 32px));margin:32px auto}.hero,.panel{background:var(--sheet);border:1px solid var(--rule);padding:28px;box-shadow:0 16px 44px rgba(38,48,43,.08)}.panel{margin-top:20px}.eyebrow{color:var(--brass);font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}h1,h2{color:var(--teal);font-family:Georgia,serif}h1{margin:8px 0;font-size:42px;line-height:1}h2{margin-top:0}.notice{color:var(--muted)}.fields{display:grid;gap:14px}.field{display:grid;gap:6px}.field label{color:var(--teal);font-size:12px;font-weight:800;text-transform:uppercase}.field input,.field select{min-height:46px;padding:9px 12px;border:1px solid var(--rule);background:white;font:inherit}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.button{min-height:44px;padding:9px 16px;border:1px solid var(--teal);border-radius:5px;background:var(--teal);color:white;font-weight:800;cursor:pointer}.button.secondary{background:transparent;color:var(--teal)}.button:disabled{cursor:not-allowed;opacity:.45}.intent{display:grid;grid-template-columns:110px 1fr;margin-top:20px;border-top:1px solid var(--rule)}.intent dt,.intent dd{margin:0;padding:9px 0;border-bottom:1px dotted var(--rule)}.intent dt{color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase}.intent dd{font:12px/1.5 var(--mono);overflow-wrap:anywhere}.confirm{display:flex;gap:10px;margin-top:18px;color:var(--teal);font-weight:700}.confirm input{width:18px;height:18px}.status{margin-top:16px;padding:12px 14px;border-left:4px solid var(--brass);background:#f4eddf}.status[data-tone="success"]{border-color:var(--green);background:#e8f3ee}.status[data-tone="error"]{border-color:var(--red);background:#f8e9e7}.hash{font:12px/1.5 var(--mono);overflow-wrap:anywhere}[hidden]{display:none!important}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">Guided Coston2 recovery</p>
+      <h1>Verify one public Rabby intent.</h1>
+      <p class="notice"><strong>Never stores wallet keys.</strong> This local page reads a public sign-request file, verifies its exact calldata hash, and asks Rabby for one explicit approval.</p>
+    </section>
+    <section class="panel">
+      <h2>Load prepared intent</h2>
+      <div class="fields">
+        <div class="field"><label for="intentPath">Public intent path</label><input id="intentPath" autocomplete="off"></div>
+        <div class="field"><label for="wallet">Detected wallet</label><select id="wallet" disabled><option value="">No wallets detected</option></select></div>
+      </div>
+      <div class="actions"><button class="button secondary" id="loadIntent">Load intent</button><button class="button secondary" id="connectWallet" disabled>Connect Rabby</button></div>
+      <dl class="intent" id="intentDetails" hidden><dt>Purpose</dt><dd id="intentPurpose">—</dd><dt>Signer</dt><dd id="intentSigner">—</dd><dt>Target</dt><dd id="intentTarget">—</dd><dt>Value</dt><dd id="intentValue">—</dd><dt>Calldata</dt><dd id="intentData">—</dd><dt>Hash</dt><dd id="intentHash">—</dd></dl>
+      <label class="confirm"><input id="confirmIntent" type="checkbox" disabled> I verified the Rabby account, Coston2 target, value, calldata, and hash shown above.</label>
+      <div class="actions"><button class="button" id="sendTransaction" disabled>Open Rabby approval</button></div>
+      <p class="status" id="status">Load the prepared public intent.</p>
+      <p class="hash" id="transactionHash" hidden></p>
+    </section>
+  </main>
+  <script src="/dashboard/recovery-operator.js"></script>
+</body>
+</html>

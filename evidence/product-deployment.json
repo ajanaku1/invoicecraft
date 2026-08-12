@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "status": "completed",
+  "network": "coston2",
+  "chain_id": 114,
+  "rpc_url": "https://coston2-api.flare.network/ext/C/rpc",
+  "transaction_hash": "0xbf87d367ea00097fae83149ca6be0111b4ddc9f7906bebdc84a66ba3b61deb65",
+  "block_number": 33737526,
+  "explorer_url": "https://coston2-explorer.flare.network/tx/0xbf87d367ea00097fae83149ca6be0111b4ddc9f7906bebdc84a66ba3b61deb65",
+  "signer": "0x34b0ba20669f3ec4f1056853780c381e5e35f724",
+  "contracts": {
+    "bootstrap": "0x8d838116a4a3d3742fcdf35fbbf854c69da1a835",
+    "test_liquidity_adapter": "0x047e7665816b3788a2efb6b49ee6d1967e8261af",
+    "invoice_settlement": "0x4b66cd0139513d0f2f2f6268de46ae07725799e4"
+  },
+  "assets": {
+    "fxrp": "0x0b6a3645c240605887a5532109323a3e12273dc7",
+    "usd0": "0xc1a5b41512496b80903d1f32d6dea3a73212e71f"
+  },
+  "adapter": {
+    "label": "TEST LIQUIDITY - NOT A REAL COSTON2 MARKET",
+    "authorized_settlement": "0x4b66cd0139513d0f2f2f6268de46ae07725799e4",
+    "administrator": "0x8d838116a4a3d3742fcdf35fbbf854c69da1a835",
+    "per_settlement_usd0_cap_uba": 100000000,
+    "lifetime_usd0_cap_uba": 500000000,
+    "total_usd0_out_uba_at_verification": 0
+  },
+  "funding": {
+    "status": "completed",
+    "transaction_hash": "0x3f3f8f390d0adfdae2f4301d2dc2d3c4fdddb1a5eabcee403de25f81893c6018",
+    "block_number": 33737726,
+    "token": "0xc1a5b41512496b80903d1f32d6dea3a73212e71f",
+    "from": "0x34b0ba20669f3ec4f1056853780c381e5e35f724",
+    "to": "0x047e7665816b3788a2efb6b49ee6d1967e8261af",
+    "amount_uba": 10000000,
+    "adapter_balance_uba_after": 10000000,
+    "explorer_url": "https://coston2-explorer.flare.network/tx/0x3f3f8f390d0adfdae2f4301d2dc2d3c4fdddb1a5eabcee403de25f81893c6018"
+  },
+  "verification": {
+    "transaction_status": "0x1",
+    "bootstrap_code_present": true,
+    "adapter_code_present": true,
+    "settlement_code_present": true,
+    "settlement_bindings_match": true,
+    "funding_transfer_matches": true
+  }
+}

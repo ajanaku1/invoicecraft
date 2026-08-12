@@ -20,9 +20,68 @@ from app.okx_payments import install_payment_middleware
 from app.pdf_engine import generate_invoice_pdf
 from app.tax import get_tax_rate
 from app.x402 import verify_payment
+from app.xrp.api import router as xrp_router
+from app.xrp.executor import SettlementPaymentPreparer
+from app.xrp.operator import BrowserOperatorCoordinator
+from app.xrp.operator_live import (
+    Coston2OperatorConfig,
+    LiveCoston2OperatorBackend,
+    LiveSettlementUserOperationBuilder,
+    TrustedXrplPaymentReader,
+)
+from app.xrp.repository import XrpInvoiceRepository
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="InvoiceCraft")
+
+
+def configure_xrp_browser_operator() -> bool:
+    """Install the keyless queue only when every public deployment binding exists."""
+    required = _xrp_operator_settings()
+    if not all(required.values()):
+        return False
+    fxrp, usd0 = _xrp_operator_assets()
+    repository = XrpInvoiceRepository()
+    config = Coston2OperatorConfig(
+        signer=required["signer"],
+        verifier_url=required["verifier_url"],
+        verifier_api_key=required["verifier_api_key"],
+        da_layer_url=required["da_layer_url"],
+        settlement_contract=required["settlement"],
+        adapter=required["adapter"],
+        fxrp_token=fxrp,
+        usd0_token=usd0,
+    )
+    app.state.xrp_operator_coordinator = BrowserOperatorCoordinator(
+        repository, TrustedXrplPaymentReader(), LiveCoston2OperatorBackend(config)
+    )
+    builder = LiveSettlementUserOperationBuilder(
+        fxrp, required["settlement"]
+    )
+    app.state.xrp_payment_preparer = SettlementPaymentPreparer(repository, builder)
+    return True
+
+
+def _xrp_operator_settings() -> dict[str, str]:
+    return {
+        "token": os.getenv("XRP_OPERATOR_TOKEN", ""),
+        "signer": os.getenv("COSTON2_SIGNER_ADDRESS", ""),
+        "verifier_url": os.getenv("VERIFIER_URL_TESTNET", ""),
+        "verifier_api_key": os.getenv("VERIFIER_API_KEY_TESTNET", ""),
+        "da_layer_url": os.getenv("COSTON2_DA_LAYER_URL", ""),
+        "settlement": os.getenv("XRP_SETTLEMENT_CONTRACT", ""),
+        "adapter": os.getenv("XRP_LIQUIDITY_ADAPTER", ""),
+    }
+
+
+def _xrp_operator_assets() -> tuple[str, str]:
+    fxrp = os.getenv(
+        "COSTON2_FXRP_TOKEN", "0x0b6a3645c240605887a5532109323a3e12273dc7"
+    )
+    usd0 = os.getenv(
+        "COSTON2_USD0_TOKEN", "0xc1a5b41512496b80903d1f32d6dea3a73212e71f"
+    )
+    return fxrp, usd0
 
 # Reference recorded on invoices settled through the OKX Payment SDK, where the
 # on-chain settlement is performed by the facilitator rather than by the caller.
@@ -266,6 +325,10 @@ async def invoice_endpoint(
         "invoice": invoice.model_dump(),
         "pdf": pdf_b64,
     }
+
+
+configure_xrp_browser_operator()
+app.include_router(xrp_router)
 
 
 # Serve the demo dashboard from the same origin as the API (so the browser's

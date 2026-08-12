@@ -157,6 +157,47 @@ body{
 .btn-primary:active{transform:translateY(0)}
 .btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
 
+/* Free XRP settlement link */
+.xrp-create{
+  margin-top:16px;padding:18px;background:#eee8dc;
+  border:1px solid #d8c8aa;border-radius:12px;
+}
+.xrp-create-head{display:flex;align-items:start;justify-content:space-between;gap:12px}
+.xrp-create h2{font-family:var(--heading);font-size:17px;line-height:1.2;color:var(--primary)}
+.xrp-create-kicker{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#8a642a}
+.xrp-create-copy{margin-top:6px;font-size:12px;line-height:1.5;color:#6e685f}
+.xrp-free-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--primary);white-space:nowrap}
+.xrp-field{margin-top:14px}
+.xrp-field label{display:block;font-size:11px;font-weight:700;color:var(--primary)}
+.xrp-field input{
+  width:100%;min-height:46px;margin-top:6px;padding:10px 12px;
+  background:#fff;border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font:16px var(--mono);
+}
+.xrp-field input[aria-invalid="true"]{border-color:var(--error)}
+.xrp-field input:focus-visible{outline:none;box-shadow:0 0 0 2px #eee8dc,0 0 0 4px #9a722f}
+.xrp-network-note{margin-top:8px;font-size:11px;line-height:1.5;color:#6e685f}
+.btn-xrp{
+  width:100%;min-height:46px;margin-top:12px;padding:10px 16px;
+  background:transparent;border:1px solid var(--primary);border-radius:8px;
+  color:var(--primary);font-size:14px;font-weight:700;cursor:pointer;
+  transition:transform 150ms cubic-bezier(.22,1,.36,1),background 150ms ease-out;
+}
+.btn-xrp:active{transform:scale(.97)}
+.btn-xrp:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.xrp-create-error{margin-top:8px;color:var(--error);font-size:12px;font-weight:600}
+.xrp-share-panel{margin-top:14px;padding:14px;background:#fff;border-radius:8px;border:1px solid var(--border)}
+.xrp-share-panel strong{display:block;color:var(--primary);font-family:var(--heading);font-size:16px}
+.xrp-share-panel p{margin-top:4px;color:var(--muted);font-size:11px}
+.xrp-share-link{display:block;margin-top:10px;color:var(--primary);font:11px/1.5 var(--mono);overflow-wrap:anywhere}
+.xrp-share-actions{display:flex;gap:8px;margin-top:10px}
+.xrp-share-actions a,.xrp-share-actions button{
+  display:inline-flex;align-items:center;justify-content:center;min-height:44px;
+  padding:0 12px;border:1px solid var(--border);border-radius:8px;background:#fff;
+  color:var(--primary);font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;
+}
+@media(hover:hover){.btn-xrp:hover{background:rgba(26,58,58,.06)}.xrp-share-actions a:hover,.xrp-share-actions button:hover{border-color:var(--accent)}}
+
 /* Payment Card */
 .payment-card{
   max-height:0;opacity:0;overflow:hidden;
@@ -486,6 +527,27 @@ body{
           <button class="btn-primary" id="generateBtn">Generate Invoice</button>
         </div>
 
+        <section class="xrp-create" aria-labelledby="xrpCreateTitle">
+          <div class="xrp-create-head">
+            <div><p class="xrp-create-kicker">XRP settlement</p><h2 id="xrpCreateTitle">Create a free XRP pay link</h2></div>
+            <span class="xrp-free-label">Free to create</span>
+          </div>
+          <p class="xrp-create-copy">Reuse the invoice details above and bind the contractor’s Coston2 payout address. The client pays with XRP; the contractor receives the exact value in USD₮0.</p>
+          <div class="xrp-field">
+            <label for="xrpBeneficiary">Flare payout address</label>
+            <input id="xrpBeneficiary" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x…" aria-describedby="xrpNetworkNote xrpCreateError">
+          </div>
+          <p class="xrp-network-note" id="xrpNetworkNote">Coston2 testnet · Test liquidity · No mainnet guarantee</p>
+          <button class="btn-xrp" id="createXrpBtn" type="button">Create free XRP invoice</button>
+          <p class="xrp-create-error" id="xrpCreateError" role="alert" hidden></p>
+          <div class="xrp-share-panel" id="xrpSharePanel" role="status" hidden>
+            <strong>Persistent pay link ready</strong>
+            <p>Open · Coston2 · Print or save the invoice as PDF from the pay page.</p>
+            <a class="xrp-share-link" id="xrpShareLink" href="/pay/">/pay/…</a>
+            <div class="xrp-share-actions"><a id="openXrpLink" href="/pay/">Open pay page</a><button id="copyXrpLink" type="button">Copy link</button></div>
+          </div>
+        </section>
+
         <!-- Payment Card (inline, slide-in) -->
         <div class="payment-card" id="paymentCard" role="status" aria-live="polite">
           <div class="payment-card-inner">
@@ -630,5 +692,6 @@ body{
 
 <script src="x402-client.js"></script>
 <script src="app.js"></script>
+<script src="xrp-create.js"></script>
 </body>
 </html>

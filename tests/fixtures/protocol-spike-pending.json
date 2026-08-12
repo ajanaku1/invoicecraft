@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "status": "pending_authorization",
+  "authorization_note": "Live XRPL testnet and Coston2 transactions require the separate checkpoint; no live facts are asserted here.",
+  "protocol": {
+    "packed_user_operation_hex": null,
+    "user_op_hash_hex": null,
+    "memo_data_hex": null,
+    "source_url": null
+  },
+  "xrpl": {
+    "rpc_url": null,
+    "transaction_hash": null,
+    "source_account": null,
+    "core_vault_destination": null,
+    "amount_drops": null,
+    "delivered_amount_drops": null,
+    "validated_ledger_index": null,
+    "timestamp": null,
+    "source_url": null
+  },
+  "flare": {
+    "rpc_url": null,
+    "chain_id": null,
+    "transaction_hash": null,
+    "personal_account": null,
+    "call_target": null,
+    "block_number": null,
+    "block_hash": null,
+    "timestamp": null,
+    "source_url": null
+  },
+  "fees": {
+    "minimum_fee_uba": null,
+    "fee_bips": null,
+    "memo_executor_fee_uba": null,
+    "standard_direct_mint_executor_fee_uba": null,
+    "asset_minting_granularity_uba": null,
+    "lot_size_amg": null,
+    "lot_size_uba": null,
+    "minting_fee_uba": null,
+    "net_minted_uba": null,
+    "asset_decimals": null,
+    "lot_size_xrp": null,
+    "minimum_redeem_amount_uba": null,
+    "minimum_redeem_amount_xrp": null,
+    "query_block": null,
+    "source_url": null
+  }
+}

@@ -64,6 +64,22 @@ def _conn() -> sqlite3.Connection:
     conn.execute(
         "CREATE TABLE IF NOT EXISTS used_txs (tx TEXT PRIMARY KEY, created REAL NOT NULL)"
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS xrp_invoices "
+        "(id TEXT PRIMARY KEY, document TEXT NOT NULL, updated REAL NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS xrp_idempotency "
+        "(key_hash TEXT PRIMARY KEY, document TEXT NOT NULL, created REAL NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS xrp_transactions "
+        "(tx_hash TEXT PRIMARY KEY, invoice_id TEXT NOT NULL, created REAL NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS xrp_execution_locks "
+        "(invoice_id TEXT PRIMARY KEY, owner TEXT NOT NULL, expires REAL NOT NULL)"
+    )
     return conn
 
 
@@ -215,5 +231,143 @@ def consume_tx(tx_hash: str) -> None:
                 (key, time.time()),
             )
             conn.commit()
+        finally:
+            conn.close()
+
+
+def create_xrp_invoice(invoice_id: str, document: str) -> bool:
+    if _redis_cfg():
+        return _redis("SET", f"xrp:invoice:{invoice_id}", document, "NX") == "OK"
+    with _lock:
+        conn = _conn()
+        try:
+            cursor = conn.execute(
+                "INSERT OR IGNORE INTO xrp_invoices (id, document, updated) VALUES (?, ?, ?)",
+                (invoice_id, document, time.time()),
+            )
+            conn.commit()
+            return cursor.rowcount == 1
+        finally:
+            conn.close()
+
+
+def get_xrp_invoice(invoice_id: str) -> str | None:
+    if _redis_cfg():
+        value = _redis("GET", f"xrp:invoice:{invoice_id}")
+        return value if isinstance(value, str) else None
+    with _lock:
+        conn = _conn()
+        try:
+            row = conn.execute(
+                "SELECT document FROM xrp_invoices WHERE id = ?", (invoice_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+    return row[0] if row else None
+
+
+def replace_xrp_invoice(invoice_id: str, document: str) -> bool:
+    if _redis_cfg():
+        return _redis("SET", f"xrp:invoice:{invoice_id}", document, "XX") == "OK"
+    with _lock:
+        conn = _conn()
+        try:
+            cursor = conn.execute(
+                "UPDATE xrp_invoices SET document = ?, updated = ? WHERE id = ?",
+                (document, time.time(), invoice_id),
+            )
+            conn.commit()
+            return cursor.rowcount == 1
+        finally:
+            conn.close()
+
+
+def claim_xrp_idempotency(key_hash: str, document: str) -> str:
+    if _redis_cfg():
+        key = f"xrp:idempotency:{key_hash}"
+        _redis("SET", key, document, "NX")
+        value = _redis("GET", key)
+        if not isinstance(value, str):
+            raise RuntimeError("idempotency claim was not stored")
+        return value
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO xrp_idempotency (key_hash, document, created) VALUES (?, ?, ?)",
+                (key_hash, document, time.time()),
+            )
+            row = conn.execute(
+                "SELECT document FROM xrp_idempotency WHERE key_hash = ?", (key_hash,)
+            ).fetchone()
+            conn.commit()
+        finally:
+            conn.close()
+    if row is None:
+        raise RuntimeError("idempotency claim was not stored")
+    return row[0]
+
+
+def claim_xrp_transaction(tx_hash: str, invoice_id: str) -> str:
+    key = f"xrp:transaction:{tx_hash}"
+    if _redis_cfg():
+        _redis("SET", key, invoice_id, "NX")
+        value = _redis("GET", key)
+        if not isinstance(value, str):
+            raise RuntimeError("transaction claim was not stored")
+        return value
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO xrp_transactions (tx_hash, invoice_id, created) VALUES (?, ?, ?)",
+                (tx_hash, invoice_id, time.time()),
+            )
+            row = conn.execute(
+                "SELECT invoice_id FROM xrp_transactions WHERE tx_hash = ?", (tx_hash,)
+            ).fetchone()
+            conn.commit()
+        finally:
+            conn.close()
+    if row is None:
+        raise RuntimeError("transaction claim was not stored")
+    return row[0]
+
+
+def acquire_xrp_execution_lock(
+    invoice_id: str, owner: str, now: int, ttl: int
+) -> bool:
+    if _redis_cfg():
+        return _redis("SET", f"xrp:lock:{invoice_id}", owner, "NX", "EX", ttl) == "OK"
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                "DELETE FROM xrp_execution_locks WHERE invoice_id = ? AND expires <= ?",
+                (invoice_id, now),
+            )
+            cursor = conn.execute(
+                "INSERT OR IGNORE INTO xrp_execution_locks (invoice_id, owner, expires) VALUES (?, ?, ?)",
+                (invoice_id, owner, now + ttl),
+            )
+            conn.commit()
+            return cursor.rowcount == 1
+        finally:
+            conn.close()
+
+
+def release_xrp_execution_lock(invoice_id: str, owner: str) -> bool:
+    if _redis_cfg():
+        script = "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) else return 0 end"
+        return int(_redis("EVAL", script, "1", f"xrp:lock:{invoice_id}", owner)) == 1
+    with _lock:
+        conn = _conn()
+        try:
+            cursor = conn.execute(
+                "DELETE FROM xrp_execution_locks WHERE invoice_id = ? AND owner = ?",
+                (invoice_id, owner),
+            )
+            conn.commit()
+            return cursor.rowcount == 1
         finally:
             conn.close()

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Pay an invoice · InvoiceCraft</title>
+  <link rel="icon" type="image/png" href="/logo.png">
+  <style>
+    *,*::before,*::after{box-sizing:border-box}*{margin:0}
+    :root{
+      --paper:#f5f2eb;--sheet:#fff;--teal:#1a3a3a;--teal-open:#2a5a5a;
+      --brass:#b8893e;--ink:#2c2c2c;--muted:#696660;--rule:#d9d0c2;
+      --success:#087b57;--error:#a83a34;--warning:#8a5a18;--focus:#a7792f;
+      --radius-sm:6px;--radius-lg:12px;
+      --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;
+      --space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;
+      --space-12:48px;--space-16:64px;
+      --serif:"Iowan Old Style","Palatino Linotype",Georgia,serif;
+      --sans:"Avenir Next","Gill Sans",sans-serif;
+      --mono:"SFMono-Regular",Menlo,monospace;
+      --ease-out:cubic-bezier(.22,1,.36,1);
+    }
+    html{background:var(--paper)}
+    body{min-height:100vh;background:var(--paper);color:var(--ink);font:16px/1.5 var(--sans);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+    button,input{font:inherit}button,a{min-height:44px;-webkit-tap-highlight-color:transparent}button{cursor:pointer}
+    :focus-visible{outline:0;box-shadow:0 0 0 2px var(--sheet),0 0 0 4px var(--focus)}
+    [hidden]{display:none!important}.skip-link{position:fixed;top:var(--space-2);left:var(--space-2);z-index:20;padding:var(--space-2) var(--space-3);background:var(--teal);color:#fff;transform:translateY(-160%);text-decoration:none;border-radius:var(--radius-sm)}.skip-link:focus{transform:none}
+    .shell{width:min(1180px,calc(100% - var(--space-10)));margin:auto;padding:var(--space-6) 0 var(--space-16)}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding-bottom:var(--space-4);border-bottom:1px solid var(--rule)}
+    .brand{display:flex;align-items:center;gap:var(--space-3);color:var(--teal);text-decoration:none}.brand img{width:36px;height:36px;border-radius:var(--radius-sm)}.brand strong{display:block;font:700 20px/1.1 var(--serif)}.brand small{display:block;margin-top:2px;color:var(--brass);font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .network-label{display:flex;align-items:center;gap:var(--space-2);color:var(--teal);font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.network-label::before{content:"";width:8px;height:8px;background:var(--success);border-radius:50%;box-shadow:0 0 0 4px rgba(8,123,87,.12)}
+    .network-note{display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-4);padding:var(--space-3) var(--space-4);background:#ece4d5;border-left:4px solid var(--brass);color:#5b5142;font-size:12px}.network-note strong{color:var(--teal)}
+    .layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:var(--space-12);margin-top:var(--space-10)}
+    .summary{position:sticky;top:var(--space-6);align-self:start}.eyebrow{color:var(--brass);font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.summary h1{margin-top:var(--space-3);color:var(--teal);font:700 clamp(32px,4vw,48px)/1 var(--serif);letter-spacing:-.03em}.summary-copy{margin-top:var(--space-4);color:var(--muted);font-size:14px}
+    .amount{margin-top:var(--space-8);padding:var(--space-5) 0;border-block:1px solid var(--rule)}.label{display:block;color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.amount strong{display:block;margin-top:var(--space-1);color:var(--teal);font:700 36px/1 var(--serif);font-variant-numeric:tabular-nums}
+    .summary-list{margin-top:var(--space-5)}.summary-row{display:grid;grid-template-columns:92px minmax(0,1fr);gap:var(--space-2);padding:var(--space-2) 0;border-bottom:1px dotted var(--rule);font-size:12px}.summary-row dt{color:var(--muted)}.summary-row dd{font-weight:700;overflow-wrap:anywhere}.mono{font-family:var(--mono)}
+    .summary-actions{display:grid;gap:var(--space-2);margin-top:var(--space-5)}
+    .docket{position:relative;min-width:0;background:var(--sheet);border:1px solid var(--rule);box-shadow:0 16px 40px rgba(26,58,58,.07);animation:arrive 200ms var(--ease-out) both}.docket::after{content:"";position:absolute;left:0;right:0;bottom:-7px;height:14px;background:radial-gradient(circle at 7px 0,transparent 6px,var(--sheet) 6.5px) 0 0/14px 14px}
+    .docket-head{display:flex;align-items:end;justify-content:space-between;gap:var(--space-6);padding:var(--space-8);border-bottom:2px solid var(--teal)}.docket-head h2{margin-top:var(--space-1);color:var(--teal);font:700 clamp(28px,3vw,36px)/1.1 var(--serif);letter-spacing:-.02em}.stamp{padding:var(--space-2) var(--space-3);border:2px solid var(--brass);color:var(--warning);font:800 12px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;transform:rotate(-2deg)}
+    .docket-body{display:grid;grid-template-columns:190px minmax(0,1fr)}.rail{min-width:0;padding:var(--space-6) var(--space-4);border-right:1px solid var(--rule);background:#fbfaf7}.rail button{width:100%;display:grid;grid-template-columns:24px minmax(0,1fr);gap:var(--space-2);align-items:start;min-height:44px;padding:var(--space-2);border:0;border-left:2px solid transparent;background:transparent;color:var(--muted);text-align:left;font-size:12px}.rail-index{display:grid;place-items:center;width:22px;height:22px;border:1px solid var(--rule);border-radius:50%;font:700 12px var(--mono)}.rail button[aria-current="step"]{border-left-color:var(--brass);background:#f1ece3;color:var(--teal);font-weight:800}.rail button[data-complete="true"] .rail-index{background:var(--teal);border-color:var(--teal);color:#fff}
+    .record{min-width:0;min-height:520px;padding:var(--space-8)}.record[aria-busy="true"]{opacity:.65}.panel-head{display:flex;align-items:start;justify-content:space-between;gap:var(--space-5)}.panel h3{margin-top:var(--space-1);color:var(--teal);font:700 32px/1.1 var(--serif);letter-spacing:-.02em}.step-count{color:var(--muted);font:800 12px var(--mono);white-space:nowrap}.panel-copy{max-width:620px;margin-top:var(--space-3);color:var(--muted);font-size:14px}
+    .promise{display:flex;align-items:center;justify-content:space-between;gap:var(--space-5);margin-top:var(--space-6);padding:var(--space-5);background:#f3eee5;border:1px solid var(--rule)}.promise strong{display:block;margin-top:var(--space-1);color:var(--teal);font:700 28px/1.1 var(--serif);font-variant-numeric:tabular-nums}.promise-note{max-width:180px;color:var(--muted);font-size:12px;text-align:right}
+    .facts{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:var(--space-4);border:1px solid var(--rule);background:var(--rule)}.fact{min-width:0;padding:var(--space-4);background:var(--sheet)}.fact b{display:block;margin-top:var(--space-1);color:var(--teal);font-size:14px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.fact b.mono{font-size:12px}
+    .field{margin-top:var(--space-5)}.field label{display:block;color:var(--teal);font-size:14px;font-weight:800}.field input{width:100%;min-height:48px;margin-top:var(--space-2);padding:var(--space-3);border:1px solid var(--rule);border-radius:var(--radius-sm);background:#fff;color:var(--ink);font:16px var(--mono)}.field input[aria-invalid="true"]{border-color:var(--error)}.field-note{margin-top:var(--space-2);color:var(--muted);font-size:12px}.field-error{margin-top:var(--space-2);color:var(--error);font-size:12px;font-weight:800}
+    .actions{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-6)}.button{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 var(--space-5);border-radius:var(--radius-sm);font-size:14px;font-weight:800;text-decoration:none;transition:transform 150ms var(--ease-out)}.button:active{transform:scale(.97)}.button-primary{border:1px solid var(--teal);background:var(--teal);color:#fff}.button-secondary{border:1px solid var(--rule);background:#fff;color:var(--teal)}.button-tertiary{justify-content:flex-start;min-height:44px;padding:0;border:0;background:transparent;color:var(--teal);text-decoration:underline}.button:disabled{cursor:not-allowed;opacity:.5;transform:none}
+    .status-line{margin-top:var(--space-5);padding:var(--space-4);border-left:4px solid var(--brass);background:#f7f3eb;color:var(--ink);font-size:14px}.status-line strong{color:var(--teal)}.status-line[data-tone="success"]{border-left-color:var(--success)}.status-line[data-tone="error"]{border-left-color:var(--error);background:#fff5f4}.status-line[data-tone="loading"]{animation:pulse 1.2s ease-in-out infinite}
+    .signing-result{margin-top:var(--space-5);padding:var(--space-4);border:1px solid var(--rule);background:#fbfaf7}.signing-result h4{color:var(--teal);font:700 20px var(--serif)}.qr{display:block;width:160px;height:160px;margin-top:var(--space-4);border:1px solid var(--rule);border-radius:var(--radius-sm)}.transaction{max-height:180px;margin-top:var(--space-3);padding:var(--space-3);overflow:auto;background:#f0ede6;border-radius:var(--radius-sm);color:var(--teal);font:12px/1.5 var(--mono);white-space:pre-wrap;word-break:break-all}
+    details.disclosure{margin-top:var(--space-6);padding-top:var(--space-4);border-top:1px solid var(--rule)}details.disclosure summary{display:flex;align-items:center;min-height:44px;color:var(--teal);font-size:14px;font-weight:800;cursor:pointer}details.disclosure p{padding-bottom:var(--space-3);color:var(--muted);font-size:12px}.recovery-box{padding:var(--space-4);border:1px solid #dfb5b1;background:#fff6f5;color:#6f302c}.recovery-box strong{display:block;margin-bottom:var(--space-1)}
+    .receipt-links{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);margin-top:var(--space-4)}.receipt-links a{display:flex;align-items:center;padding:0 var(--space-3);border:1px solid var(--rule);border-radius:var(--radius-sm);color:var(--teal);font:700 12px var(--mono);text-decoration:none}.receipt-evidence{margin-top:var(--space-4);padding:var(--space-4);border:1px solid var(--rule);background:#fbfaf7}.receipt-evidence code{display:block;margin-top:var(--space-2);color:var(--teal);font:12px/1.5 var(--mono);overflow-wrap:anywhere}
+    .page-error{margin-top:var(--space-5);padding:var(--space-4);border:1px solid #dfb5b1;background:#fff6f5;color:#6f302c}.page-error strong{display:block}.footer{margin-top:var(--space-8);padding-top:var(--space-4);border-top:1px solid var(--rule);color:var(--muted);font-size:12px}
+    @keyframes arrive{from{opacity:.35;transform:translateY(6px)}to{opacity:1;transform:none}}@keyframes pulse{50%{opacity:.55}}
+    @media(hover:hover){.button-primary:hover{background:#102b2b}.button-secondary:hover,.receipt-links a:hover{border-color:var(--brass)}.rail button:hover{color:var(--teal)}}
+    @media(max-width:820px){.shell{width:min(100% - var(--space-6),680px);padding-top:var(--space-4)}.layout{grid-template-columns:minmax(0,1fr);gap:var(--space-6);margin-top:var(--space-6)}.summary{position:static}.summary h1{font-size:36px}.summary-list{display:none}.amount{display:flex;align-items:end;justify-content:space-between;padding:var(--space-4) 0}.amount strong{font-size:32px}.docket-head{padding:var(--space-5)}.docket-body{display:block}.rail{display:flex;max-width:100%;overflow:auto;padding:var(--space-2);border-right:0;border-bottom:1px solid var(--rule)}.rail button{min-width:120px;border-left:0;border-bottom:2px solid transparent}.rail button[aria-current="step"]{border-bottom-color:var(--brass)}.record{min-height:560px;padding:var(--space-5)}.network-note{align-items:start}}
+    @media(max-width:520px){.topbar{align-items:start}.network-label span{display:none}.docket-head{align-items:start}.stamp{display:none}.panel-head{display:block}.step-count{display:block;margin-top:var(--space-2)}.panel h3{font-size:28px}.promise{align-items:start;flex-direction:column}.promise-note{text-align:left}.facts,.receipt-links{grid-template-columns:1fr}.actions{align-items:stretch;flex-direction:column}.button{width:100%}.button-tertiary{justify-content:center}.qr{margin-inline:auto}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#settlementDocket">Skip to payment</a>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="InvoiceCraft home"><img src="/logo.png" alt=""><span><strong>InvoiceCraft</strong><small>XRP settlement</small></span></a>
+      <div class="network-label"><span>Coston2 testnet</span></div>
+    </header>
+    <div class="network-note" role="note"><strong>Test environment</strong><span>Uses Test liquidity on Coston2. No mainnet guarantee.</span></div>
+
+    <main class="layout">
+      <aside class="summary" aria-label="Invoice summary">
+        <p class="eyebrow" id="invoiceNumber">Invoice loading</p>
+        <h1><span id="clientName">Client</span>, your invoice is ready.</h1>
+        <p class="summary-copy">Pay once with XRP. <span id="issuerName">The contractor</span> receives the exact invoice value in USD₮0 after XRPL finality and Flare execution.</p>
+        <div class="amount"><span class="label">Invoice total</span><strong id="invoiceTotal">—</strong></div>
+        <dl class="summary-list"><div class="summary-row"><dt>For</dt><dd id="invoiceDescription">—</dd></div><div class="summary-row"><dt>Issued by</dt><dd id="issuerSummary">—</dd></div><div class="summary-row"><dt>Beneficiary</dt><dd class="mono" id="beneficiary">—</dd></div><div class="summary-row"><dt>Network</dt><dd>Coston2</dd></div></dl>
+        <div class="summary-actions"><button type="button" class="button button-secondary" id="printButton">Print or save PDF</button><a class="button button-tertiary" href="/">Create another invoice</a></div>
+      </aside>
+
+      <section class="docket" id="settlementDocket" aria-labelledby="docketTitle">
+        <header class="docket-head"><div><p class="eyebrow">Payment record</p><h2 id="docketTitle">A traceable path to paid</h2></div><span class="stamp" id="statusStamp">Loading</span></header>
+        <div class="docket-body">
+          <nav class="rail" id="stepRail" aria-label="Settlement steps">
+            <button type="button" data-step="0" aria-current="step"><span class="rail-index">1</span><span>Review quote</span></button>
+            <button type="button" data-step="1"><span class="rail-index">2</span><span>Sign in Xaman</span></button>
+            <button type="button" data-step="2"><span class="rail-index">3</span><span>XRPL finality</span></button>
+            <button type="button" data-step="3"><span class="rail-index">4</span><span>Flare execution</span></button>
+            <button type="button" data-step="4"><span class="rail-index">5</span><span>Paid receipt</span></button>
+          </nav>
+
+          <article class="record" id="record" aria-live="polite" aria-busy="true">
+            <div class="page-error" id="pageError" role="alert" hidden><strong id="pageErrorTitle">We could not load this invoice.</strong><span id="pageErrorMessage">Check the link and try again.</span><div class="actions"><button type="button" class="button button-secondary" id="retryButton">Try again</button></div></div>
+
+            <section class="panel" data-panel="quote">
+              <div class="panel-head"><div><p class="eyebrow">Docket section 1</p><h3>A live quote, held briefly</h3></div><span class="step-count">01 / 05</span></div>
+              <p class="panel-copy">The quote uses the current FTSO XRP/USD feed and expires before it can become stale.</p>
+              <div class="promise"><div><span class="label">Contractor receives exactly</span><strong id="quotePayout">— USD₮0</strong></div><span class="promise-note">XRPL finalizes first, then Flare execution begins.</span></div>
+              <div class="facts"><div class="fact"><span class="label">FTSO XRP/USD</span><b id="quotePrice">Not quoted</b></div><div class="fact"><span class="label">Maximum FXRP</span><b id="quoteMaximum">—</b></div><div class="fact"><span class="label">Quote expires</span><b id="quoteExpiry">—</b></div><div class="fact"><span class="label">Liquidity</span><b>Test adapter</b></div></div>
+              <div class="status-line" id="quoteStatus"><strong>Invoice ready.</strong> Request a live quote to continue.</div>
+              <div class="actions"><button type="button" class="button button-primary" id="quoteButton">Get live quote</button><button type="button" class="button button-secondary" id="continueToSigning" hidden>Continue to signing</button></div>
+            </section>
+
+            <section class="panel" data-panel="signing" hidden>
+              <div class="panel-head"><div><p class="eyebrow">Docket section 2</p><h3>Approve one XRPL payment</h3></div><span class="step-count">02 / 05</span></div>
+              <p class="panel-copy">Enter the public XRP account that will sign. InvoiceCraft never asks for or handles your secret.</p>
+              <div class="field"><label for="sourceAccount">Your XRP account</label><input id="sourceAccount" name="source_account" autocomplete="off" spellcheck="false" aria-describedby="sourceAccountNote sourceAccountError" placeholder="r…"><p class="field-note" id="sourceAccountNote">This account is bound into the unsigned XRPL Payment.</p><p class="field-error" id="sourceAccountError" role="alert" hidden></p></div>
+              <div class="actions"><button type="button" class="button button-primary" id="signingButton">Create Xaman request</button></div>
+              <div class="signing-result" id="signingResult" hidden><h4 id="signingTitle">Signing request ready</h4><p class="panel-copy" id="signingCopy"></p><img class="qr" id="xamanQr" alt="Xaman signing QR code" hidden><div class="actions"><a class="button button-primary" id="xamanLink" href="https://xumm.app" target="_blank" rel="noopener" hidden>Open Xaman</a><button type="button" class="button button-secondary" id="continueToSubmit">I have signed</button></div><details class="disclosure"><summary>Unsigned transaction fallback</summary><p>Review every field and sign this XRPL Payment in a compatible testnet wallet.</p><pre class="transaction" id="unsignedTransaction">Unsigned transaction not prepared.</pre></details></div>
+            </section>
+
+            <section class="panel" data-panel="xrpl" hidden>
+              <div class="panel-head"><div><p class="eyebrow">Docket section 3</p><h3>Verify XRPL finality</h3></div><span class="step-count">03 / 05</span></div>
+              <p class="panel-copy">After signing, paste the transaction hash. The server verifies finalized success, sender, Core Vault, amount, memo, destination tag, and replay protection.</p>
+              <div class="field"><label for="transactionHash">XRPL transaction hash</label><input id="transactionHash" name="xrpl_transaction_hash" autocomplete="off" spellcheck="false" aria-describedby="transactionHashNote transactionHashError" placeholder="64 hexadecimal characters"><p class="field-note" id="transactionHashNote">Use the hash from the signed testnet payment.</p><p class="field-error" id="transactionHashError" role="alert" hidden></p></div>
+              <div class="actions"><button type="button" class="button button-primary" id="submitButton">Verify payment and settle</button><button type="button" class="button button-secondary" id="backToSigning">Back to signing</button></div>
+            </section>
+
+            <section class="panel" data-panel="execution" hidden>
+              <div class="panel-head"><div><p class="eyebrow">Docket section 4</p><h3>Flare settlement in progress</h3></div><span class="step-count">04 / 05</span></div>
+              <p class="panel-copy">The XRPL payment is final. FDC evidence and the retained 0xFE UserOp now authorize FSA direct-mint and the capped Test liquidity settlement.</p>
+              <div class="promise"><div><span class="label">Settlement status</span><strong id="executionStatus">Checking evidence</strong></div><span class="promise-note">No automatic recovery or fund movement.</span></div>
+              <div class="facts"><div class="fact"><span class="label">XRPL</span><b>Finalized first</b></div><div class="fact"><span class="label">FDC</span><b id="fdcStatus">Verifying</b></div><div class="fact"><span class="label">FSA</span><b>0xFE UserOp retained</b></div><div class="fact"><span class="label">Adapter</span><b>Test liquidity</b></div></div>
+              <div class="status-line" data-tone="loading" id="executionMessage"><strong>Settlement is working.</strong> This page checks for new evidence automatically.</div>
+              <div class="actions"><button type="button" class="button button-secondary" id="refreshButton">Refresh status</button></div>
+              <div class="recovery-box" id="recoveryPanel" hidden><strong>Guided recovery required</strong><span id="recoveryGuidance">Evidence is retained. Do not move funds automatically.</span></div>
+            </section>
+
+            <section class="panel" data-panel="receipt" hidden>
+              <div class="panel-head"><div><p class="eyebrow">Docket section 5</p><h3>Paid, with both records attached</h3></div><span class="step-count">05 / 05</span></div>
+              <p class="panel-copy">The contractor payout matches the invoice exactly. Keep this receipt with its XRPL, FDC, FSA, and Coston2 evidence.</p>
+              <div class="promise"><div><span class="label">Exact payout verified</span><strong id="receiptPayout">— USD₮0</strong></div><span class="promise-note">Beneficiary binding verified.</span></div>
+              <div class="receipt-links"><a id="xrplExplorer" href="https://testnet.xrpl.org" target="_blank" rel="noopener">XRPL explorer ↗</a><a id="flareExplorer" href="https://coston2-explorer.flare.network" target="_blank" rel="noopener">Coston2 explorer ↗</a></div>
+              <div class="receipt-evidence"><span class="label">Retained UserOp hash</span><code id="userOpHash">—</code><span class="label">FDC proof</span><code id="fdcProof">—</code></div>
+              <div class="status-line" data-tone="success"><strong>Paid.</strong> Exact USD₮0 payout and dual-ledger evidence are complete.</div>
+            </section>
+
+            <details class="disclosure"><summary>Network and guided recovery disclosure</summary><p>Coston2 is a test network. This flow uses explicitly labelled Test liquidity and makes No mainnet guarantee. XRPL finalizes before the later Flare execution; the two ledgers settle in sequence.</p><div class="recovery-box"><strong>Guided recovery only</strong>InvoiceCraft retains evidence and presents the valid next action. It never moves funds automatically.</div></details>
+          </article>
+        </div>
+      </section>
+    </main>
+    <footer class="footer">InvoiceCraftXRP · Coston2 testnet · Test liquidity · No mainnet guarantee</footer>
+  </div>
+  <script src="/xrp-pay.js"></script>
+</body>
+</html>

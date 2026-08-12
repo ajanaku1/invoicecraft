@@ -1,15 +1,50 @@
 __pycache__/
 *.pyc
 *.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# Secrets
 .env
 .env.local
-venv/
-.venv/
-.pytest_cache/
-.DS_Store
-*.log
+.env*.local
+
+# Build artifacts
+node_modules/
+.next/
+dist/
+build/
+.vercel/
+.Codex/
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+artifacts/
+cache/
+typechain-types/
+
+# Local data
+data/*.db
+*.sqlite
 *.db
 
-# Local docs / scaffolding — keep only README.md in the repo
+# Operating system and logs
+.DS_Store
+*.log
+
+# Local workspace files
+.vscode/
+ai/
+brand/
+proposals/
+scratchpad/
+video/
+scripts/verify_proposals.py
+tests/test_verify_proposals.py
 *.md
-!README.md
+!/README.md
+!/docs/**/*.md
+reports/**
+!reports/**/
+!reports/**/*.md

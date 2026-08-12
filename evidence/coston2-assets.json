@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "status": "rpc_verified",
+  "network": "coston2",
+  "chain_id": 114,
+  "rpc_url": "https://coston2-api.flare.network/ext/C/rpc",
+  "query_block": "0x2027844",
+  "asset_manager_fxrp": "0xc1ca88b937d0b528842f95d5731ffb586f4fbdfa",
+  "fxrp": {
+    "address": "0x0b6a3645c240605887a5532109323a3e12273dc7",
+    "name": "FXRP",
+    "symbol": "FTestXRP",
+    "decimals": 6,
+    "code_present": true
+  },
+  "usd0_test": {
+    "address": "0xc1a5b41512496b80903d1f32d6dea3a73212e71f",
+    "name": "USDT0 test",
+    "symbol": "USD₮0",
+    "decimals": 6,
+    "code_present": true
+  },
+  "sources": [
+    "https://dev.flare.network/network/overview",
+    "https://faucet.flare.network/coston2",
+    "https://coston2-explorer.flare.network/tokens"
+  ],
+  "disclosure": "These public asset identities were read from Coston2. They do not prove product contract deployment or settlement."
+}
