@@ -25,6 +25,17 @@ def test_shared_payment_route_serves_the_selected_docket_shell() -> None:
     assert '<script src="/xrp-pay.js"></script>' in response.text
 
 
+def test_public_homepage_displays_the_authorized_x_account() -> None:
+    response = TestClient(app).get("/")
+
+    assert response.status_code == 200
+    footer_marker = '<footer class="site-footer"'
+    assert footer_marker in response.text
+    footer = response.text.split(footer_marker, maxsplit=1)[1]
+    assert 'href="https://x.com/curioswhispers"' in footer
+    assert "> @curioswhispers</a>" in footer
+
+
 def test_payment_page_exposes_the_complete_truthful_settlement_journey() -> None:
     assert PAY_JS.is_file()
     surface = PAY_HTML.read_text() + PAY_JS.read_text()
